@@ -138,6 +138,11 @@ func main() {
 		allPRs = append(allPRs, pr)
 	}
 
+	// URLでソート
+	sort.Slice(allPRs, func(i, j int) bool {
+		return allPRs[i].URL < allPRs[j].URL
+	})
+
 	// 集計
 	orgRepoInvolvesCount := make(map[string]int)
 	orgRepoAuthorCount := make(map[string]int)
@@ -158,14 +163,12 @@ func main() {
 		orgAuthorCount[org]++
 	}
 
-	// すべての organization を統合
-	allOrganizations := make(map[string]struct{})
+	// 組織のソート
+	sortedOrganizations := make([]string, 0, len(orgInvolvesCount))
 	for org := range orgInvolvesCount {
-		allOrganizations[org] = struct{}{}
+		sortedOrganizations = append(sortedOrganizations, org)
 	}
-	for org := range orgAuthorCount {
-		allOrganizations[org] = struct{}{}
-	}
+	sort.Strings(sortedOrganizations)
 
 	// リポジトリのソート
 	sortedRepos := make([]string, 0, len(orgRepoInvolvesCount))
@@ -184,20 +187,22 @@ func main() {
 		fmt.Println()
 	}
 
+	fmt.Printf("Pull Requests summary from %s to %s:\n", startDate, endDate)
+
 	fmt.Printf("\nTotal PRs: %d\n", len(allPRs))
-	fmt.Printf("\nTotal PRs (involves): %d\n", len(involvesPRs))
-	fmt.Printf("Total PRs (author): %d\n", len(authorPRs))
+	fmt.Printf("\nTotal PRs (author): %d\n", len(authorPRs))
+	fmt.Printf("Total PRs (involves): %d\n", len(involvesPRs))
 
 	// 組織ごとの出力
 	fmt.Println("\nPR count per organization (author/involves):")
-	for org := range allOrganizations {
+	for _, org := range sortedOrganizations {
 		authorCount := orgAuthorCount[org]
 		involvesCount := orgInvolvesCount[org]
 		fmt.Printf("- %s: %d (%d)\n", org, authorCount, involvesCount)
 	}
 
 	// リポジトリごとの出力
-	fmt.Println("\nPR count per repository (author/involves, sorted):")
+	fmt.Println("\nPR count per repository (author/involves):")
 	for _, repo := range sortedRepos {
 		authorCount := orgRepoAuthorCount[repo]
 		involvesCount := orgRepoInvolvesCount[repo]

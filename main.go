@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
+	"strings"
 )
 
 const (
@@ -106,6 +108,29 @@ func main() {
 		allPRs = append(allPRs, pr)
 	}
 
+	// リポジトリごとおよび組織ごとに集計
+	repoCount := make(map[string]int)
+	orgCount := make(map[string]int)
+	for _, pr := range allPRs {
+		// `RepoURL` から `organization/repository` を抽出
+		repoParts := strings.Split(pr.RepoURL, "/")
+		if len(repoParts) >= 2 {
+			orgRepo := fmt.Sprintf("%s/%s", repoParts[len(repoParts)-2], repoParts[len(repoParts)-1])
+			repoCount[orgRepo]++
+
+			// 組織名を抽出して集計
+			org := repoParts[len(repoParts)-2]
+			orgCount[org]++
+		}
+	}
+
+	// `organization/repository` をソート
+	sortedRepos := make([]string, 0, len(repoCount))
+	for repo := range repoCount {
+		sortedRepos = append(sortedRepos, repo)
+	}
+	sort.Strings(sortedRepos)
+
 	// 結果を出力
 	if len(allPRs) == 0 {
 		fmt.Println("No PRs found for the specified criteria.")
@@ -121,5 +146,17 @@ func main() {
 		fmt.Println()
 	}
 
-	fmt.Printf("Total PRs: %d\n", len(allPRs))
+	fmt.Printf("\nTotal PRs: %d\n", len(allPRs))
+
+	// 組織ごとの PR 数を出力
+	fmt.Println("\nPR count per organization:")
+	for org, count := range orgCount {
+		fmt.Printf("- %s: %d\n", org, count)
+	}
+
+	// ソート済みのリポジトリごとの PR 数を出力
+	fmt.Println("\nPR count per repository (sorted by organization/repository):")
+	for _, repo := range sortedRepos {
+		fmt.Printf("- %s: %d\n", repo, repoCount[repo])
+	}
 }

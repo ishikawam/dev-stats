@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/joho/godotenv"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -14,8 +15,6 @@ import (
 
 const (
 	githubAPIURL = "https://api.github.com/search/issues"
-	startDate    = "2024-07-01"
-	endDate      = "2024-12-31"
 )
 
 type PR struct {
@@ -95,9 +94,15 @@ func extractRepo(repoURL string) string {
 }
 
 func main() {
+	// .env ファイルの読み込み
+	godotenv.Load()
+
+	// 環境変数の取得
 	username := os.Getenv("GITHUB_USERNAME")
 	token := os.Getenv("GITHUB_TOKEN")
-	if username == "" || token == "" {
+	startDate := os.Getenv("START_DATE")
+	endDate := os.Getenv("END_DATE")
+	if username == "" || token == "" || startDate == "" || endDate == "" {
 		log.Fatalf("Environment variables GITHUB_USERNAME and GITHUB_TOKEN must be set.")
 	}
 

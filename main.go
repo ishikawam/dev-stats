@@ -78,6 +78,22 @@ func fetchPRs(query string, token string) []PR {
 	return allPRs
 }
 
+func extractOrganization(repoURL string) string {
+	repoParts := strings.Split(repoURL, "/")
+	if len(repoParts) >= 2 {
+		return repoParts[len(repoParts)-2]
+	}
+	return ""
+}
+
+func extractRepo(repoURL string) string {
+	repoParts := strings.Split(repoURL, "/")
+	if len(repoParts) >= 2 {
+		return fmt.Sprintf("%s/%s", repoParts[len(repoParts)-2], repoParts[len(repoParts)-1])
+	}
+	return ""
+}
+
 func main() {
 	username := os.Getenv("GITHUB_USERNAME")
 	token := os.Getenv("GITHUB_TOKEN")
@@ -85,59 +101,81 @@ func main() {
 		log.Fatalf("Environment variables GITHUB_USERNAME and GITHUB_TOKEN must be set.")
 	}
 
-	// クエリ1: created の期間
-	queryCreated := fmt.Sprintf("involves:%s type:pr created:%s..%s", username, startDate, endDate)
-	createdPRs := fetchPRs(queryCreated, token)
+	// createdとmerged。involvesとauthor。updated, closedは含めない。
 
-	// クエリ2: updated の期間
-	queryUpdated := fmt.Sprintf("involves:%s type:pr updated:%s..%s", username, startDate, endDate)
-	updatedPRs := fetchPRs(queryUpdated, token)
+	// involves の PR を取得
+	queryInvolvesCreated := fmt.Sprintf("involves:%s type:pr created:%s..%s", username, startDate, endDate)
+	queryInvolvesMerged := fmt.Sprintf("involves:%s type:pr merged:%s..%s", username, startDate, endDate)
+	involvesPRsCreated := fetchPRs(queryInvolvesCreated, token)
+	involvesPRsMerged := fetchPRs(queryInvolvesMerged, token)
 
-	// 結果を統合（重複を排除するにはマップを使用）
-	prMap := make(map[string]PR)
-	for _, pr := range createdPRs {
-		prMap[pr.URL] = pr
+	// author の PR を取得
+	queryAuthorCreated := fmt.Sprintf("author:%s type:pr created:%s..%s", username, startDate, endDate)
+	queryAuthorMerged := fmt.Sprintf("author:%s type:pr merged:%s..%s", username, startDate, endDate)
+	authorPRsCreated := fetchPRs(queryAuthorCreated, token)
+	authorPRsMerged := fetchPRs(queryAuthorMerged, token)
+
+	// 結果を統合
+	involvesPRs := make(map[string]PR)
+	for _, pr := range involvesPRsCreated {
+		involvesPRs[pr.URL] = pr
 	}
-	for _, pr := range updatedPRs {
-		prMap[pr.URL] = pr
+	for _, pr := range involvesPRsMerged {
+		involvesPRs[pr.URL] = pr
 	}
 
-	// マップからスライスに変換
-	allPRs := make([]PR, 0, len(prMap))
-	for _, pr := range prMap {
+	authorPRs := make(map[string]PR)
+	for _, pr := range authorPRsCreated {
+		authorPRs[pr.URL] = pr
+	}
+	for _, pr := range authorPRsMerged {
+		authorPRs[pr.URL] = pr
+	}
+
+	// 全 PR をリスト化
+	allPRs := make([]PR, 0, len(involvesPRs))
+	for _, pr := range involvesPRs {
 		allPRs = append(allPRs, pr)
 	}
 
-	// リポジトリごとおよび組織ごとに集計
-	repoCount := make(map[string]int)
-	orgCount := make(map[string]int)
-	for _, pr := range allPRs {
-		// `RepoURL` から `organization/repository` を抽出
-		repoParts := strings.Split(pr.RepoURL, "/")
-		if len(repoParts) >= 2 {
-			orgRepo := fmt.Sprintf("%s/%s", repoParts[len(repoParts)-2], repoParts[len(repoParts)-1])
-			repoCount[orgRepo]++
+	// 集計
+	orgRepoInvolvesCount := make(map[string]int)
+	orgRepoAuthorCount := make(map[string]int)
+	orgInvolvesCount := make(map[string]int)
+	orgAuthorCount := make(map[string]int)
 
-			// 組織名を抽出して集計
-			org := repoParts[len(repoParts)-2]
-			orgCount[org]++
-		}
+	for _, pr := range involvesPRs {
+		org := extractOrganization(pr.RepoURL)
+		repo := extractRepo(pr.RepoURL)
+		orgRepoInvolvesCount[repo]++
+		orgInvolvesCount[org]++
 	}
 
-	// `organization/repository` をソート
-	sortedRepos := make([]string, 0, len(repoCount))
-	for repo := range repoCount {
+	for _, pr := range authorPRs {
+		org := extractOrganization(pr.RepoURL)
+		repo := extractRepo(pr.RepoURL)
+		orgRepoAuthorCount[repo]++
+		orgAuthorCount[org]++
+	}
+
+	// すべての organization を統合
+	allOrganizations := make(map[string]struct{})
+	for org := range orgInvolvesCount {
+		allOrganizations[org] = struct{}{}
+	}
+	for org := range orgAuthorCount {
+		allOrganizations[org] = struct{}{}
+	}
+
+	// リポジトリのソート
+	sortedRepos := make([]string, 0, len(orgRepoInvolvesCount))
+	for repo := range orgRepoInvolvesCount {
 		sortedRepos = append(sortedRepos, repo)
 	}
 	sort.Strings(sortedRepos)
 
-	// 結果を出力
-	if len(allPRs) == 0 {
-		fmt.Println("No PRs found for the specified criteria.")
-		return
-	}
-
-	fmt.Printf("Pull Requests you were involved in (created or updated) from %s to %s:\n", startDate, endDate)
+	// 出力
+	fmt.Printf("Pull Requests you were involved in (created or merged) from %s to %s:\n", startDate, endDate)
 	for _, pr := range allPRs {
 		fmt.Printf("- Title: %s\n", pr.Title)
 		fmt.Printf("  URL: %s\n", pr.URL)
@@ -147,16 +185,22 @@ func main() {
 	}
 
 	fmt.Printf("\nTotal PRs: %d\n", len(allPRs))
+	fmt.Printf("\nTotal PRs (involves): %d\n", len(involvesPRs))
+	fmt.Printf("Total PRs (author): %d\n", len(authorPRs))
 
-	// 組織ごとの PR 数を出力
-	fmt.Println("\nPR count per organization:")
-	for org, count := range orgCount {
-		fmt.Printf("- %s: %d\n", org, count)
+	// 組織ごとの出力
+	fmt.Println("\nPR count per organization (author/involves):")
+	for org := range allOrganizations {
+		authorCount := orgAuthorCount[org]
+		involvesCount := orgInvolvesCount[org]
+		fmt.Printf("- %s: %d (%d)\n", org, authorCount, involvesCount)
 	}
 
-	// ソート済みのリポジトリごとの PR 数を出力
-	fmt.Println("\nPR count per repository (sorted by organization/repository):")
+	// リポジトリごとの出力
+	fmt.Println("\nPR count per repository (author/involves, sorted):")
 	for _, repo := range sortedRepos {
-		fmt.Printf("- %s: %d\n", repo, repoCount[repo])
+		authorCount := orgRepoAuthorCount[repo]
+		involvesCount := orgRepoInvolvesCount[repo]
+		fmt.Printf("- %s: %d (%d)\n", repo, authorCount, involvesCount)
 	}
 }

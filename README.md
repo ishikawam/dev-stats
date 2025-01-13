@@ -60,6 +60,41 @@ START_DATE=2024-01-01
 END_DATE=2024-06-30
 ```
 
+## Sample Output
+
+```plaintext
+Pull Requests you were involved in (created or merged) from 2024-01-01 to 2024-06-30:
+- Title: Go version update
+  URL: https://github.com/example-org/project-api/pull/123
+  Created At: 2024-02-13T07:53:44Z
+  Repository: https://github.com/example-org/project-api
+
+- Title: Actions plugin update
+  URL: https://github.com/example-org/project-api/pull/124
+  Created At: 2024-02-20T06:44:46Z
+  Repository: https://github.com/example-org/project-api
+
+...
+
+Pull Requests summary from 2024-01-01 to 2024-06-30:
+
+Total PRs: 210
+
+Total PRs (author): 54
+Total PRs (involves): 210
+
+PR count per organization (author/involves):
+- example-org: 21 (133)
+- demo-inc: 33 (77)
+
+PR count per repository (author/involves):
+- example-org/project-api: 8 (20)
+- example-org/project-cms: 2 (2)
+- example-org/project-k8s: 4 (20)
+- demo-inc/project-server: 22 (62)
+...
+```
+
 ## Requirements
 
 - **Go**: Version 1.23.4 or later.

@@ -1,10 +1,13 @@
+
 # dev-stats
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/ishikawam/dev-stats)](https://goreportcard.com/report/github.com/ishikawam/dev-stats)
 
-A tool to analyze your GitHub productivity by fetching PR data within a specified date range.
+A tool to analyze your GitHub and Backlog productivity by fetching and summarizing activity data within a specified date range.
 
 ## Usage
+
+### GitHub
 
 1. **Clone this repository**:
    ```bash
@@ -41,19 +44,60 @@ A tool to analyze your GitHub productivity by fetching PR data within a specifie
 
 4. **Run the tool**:
    ```bash
-   go run main.go
+   go run cmd/github/main.go
    ```
 
 5. **View the output**:
     - The results, including PR details and summaries, will be displayed in your terminal.
+
+### Backlog
+
+1. **Set up your environment variables**:
+    - Update the `.env` file in the project root directory:
+      ```plaintext
+      # .env
+
+      BACKLOG_API_KEY=your-backlog-api-key
+      BACKLOG_SPACE_NAME=your-space-name
+      BACKLOG_USER_ID=your-user-id
+      BACKLOG_PROJECT_ID=your-project-id
+
+      # YYYY-MM-DD format
+      START_DATE=2024-01-01
+      END_DATE=2024-06-30
+      ```
+    - Alternatively, export the variables in your terminal:
+      ```bash
+      export BACKLOG_API_KEY=your-backlog-api-key
+      export BACKLOG_SPACE_NAME=your-space-name
+      export BACKLOG_USER_ID=your-user-id
+      export BACKLOG_PROJECT_ID=your-project-id
+      export START_DATE=2024-01-01
+      export END_DATE=2024-06-30
+      ```
+
+2. **Run the tool**:
+   ```bash
+   go run cmd/backlog/main.go
+   ```
+
+3. **View the output**:
+    - The results, including activity details, issue counts, and summaries, will be displayed in your terminal.
 
 ## Example `.env` File
 
 ```plaintext
 # .env
 
+# GitHub
 GITHUB_TOKEN=your-github-token
 GITHUB_USERNAME=your-github-username
+
+# Backlog
+BACKLOG_API_KEY=your-backlog-api-key
+BACKLOG_SPACE_NAME=your-space-name
+BACKLOG_USER_ID=your-user-id
+BACKLOG_PROJECT_ID=your-project-id
 
 # Specify the date range in YYYY-MM-DD format
 START_DATE=2024-01-01
@@ -61,6 +105,8 @@ END_DATE=2024-06-30
 ```
 
 ## Sample Output
+
+### GitHub
 
 ```plaintext
 Pull Requests you were involved in (created or merged) from 2024-01-01 to 2024-06-30:
@@ -95,6 +141,20 @@ PR count per repository (author/involves):
 ...
 ```
 
+### Backlog
+
+```plaintext
+Issues you created: 3
+Issues assigned to you: 6
+
+Activity count by type (count issues):
+- 1. Issue created: 3 (3)
+- 2. Comment added: 20 (8)
+- 3. Status changed: 10 (5)
+
+Your issues count: 21
+```
+
 ## Requirements
 
 - **Go**: Version 1.23.4 or later.
@@ -103,10 +163,13 @@ PR count per repository (author/involves):
         - `repo`
         - `read:org`
     - See GitHub's [documentation](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token) for more details.
+- **Backlog API Key**:
+    - Generate a key from your Backlog space settings.
+    - See Backlog's [API documentation](https://developer.nulab.com/docs/backlog/#api-key) for more details.
 
 ## Notes
 
-- **Custom Date Range**: Specify the `START_DATE` and `END_DATE` in the `.env` file or environment variables to fetch PRs for a specific period.
+- **Custom Date Range**: Specify the `START_DATE` and `END_DATE` in the `.env` file or environment variables to fetch data for a specific period.
 - **Output Details**:
-    - PRs you were involved in as an author or reviewer.
-    - Summary of PR counts per organization and repository.
+    - GitHub: PRs you were involved in as an author or reviewer, summary of PR counts per organization and repository.
+    - Backlog: Activity count by type, unique issues involved, and summaries.

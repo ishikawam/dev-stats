@@ -1,4 +1,4 @@
-module github-productivity
+module dev-stats
 
 go 1.23.4
 

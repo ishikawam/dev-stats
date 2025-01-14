@@ -1,6 +1,6 @@
-# github-productivity
+# dev-stats
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/ishikawam/github-productivity)](https://goreportcard.com/report/github.com/ishikawam/github-productivity)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ishikawam/dev-stats)](https://goreportcard.com/report/github.com/ishikawam/dev-stats)
 
 A tool to analyze your GitHub productivity by fetching PR data within a specified date range.
 
@@ -8,8 +8,8 @@ A tool to analyze your GitHub productivity by fetching PR data within a specifie
 
 1. **Clone this repository**:
    ```bash
-   git clone https://github.com/ishikawam/github-productivity.git
-   cd github-productivity
+   git clone https://github.com/ishikawam/dev-stats.git
+   cd dev-stats
    ```
 
 2. **Set up your environment variables**:

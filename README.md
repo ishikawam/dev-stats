@@ -3,7 +3,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/ishikawam/dev-stats)](https://goreportcard.com/report/github.com/ishikawam/dev-stats)
 
-A tool to analyze your GitHub, Backlog, and Calendar productivity by fetching and summarizing activity data within a specified date range.
+A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fetching and summarizing activity data within a specified date range.
 
 ## Usage
 
@@ -109,6 +109,35 @@ A tool to analyze your GitHub, Backlog, and Calendar productivity by fetching an
 4. **View the output**:
     - The results include detailed event listings, event count rankings, duration rankings, and all-day event rankings.
 
+### Notion
+
+1. **Set up your environment variables**:
+    - Update the `.env` file in the project root directory:
+      ```plaintext
+      # .env
+
+      NOTION_TOKEN=your-notion-integration-token
+
+      # YYYY-MM-DD format
+      START_DATE=2024-01-01
+      END_DATE=2024-06-30
+      ```
+    - Alternatively, export the variables in your terminal:
+      ```bash
+      export NOTION_TOKEN=your-notion-integration-token
+      export START_DATE=2024-01-01
+      export END_DATE=2024-06-30
+      ```
+
+2. **Run the tool**:
+   ```bash
+   make run-notion
+   ```
+
+3. **View the output**:
+    - The tool automatically detects your user ID from workspace pages
+    - The results include pages you created and updated, with URLs and timestamps
+
 ## Example `.env` File
 
 ```plaintext
@@ -123,6 +152,9 @@ BACKLOG_API_KEY=your-backlog-api-key
 BACKLOG_SPACE_NAME=your-space-name
 BACKLOG_USER_ID=your-user-id
 BACKLOG_PROJECT_ID=your-project-id
+
+# Notion
+NOTION_TOKEN=your-notion-integration-token
 
 # Calendar analysis requires START_DATE and END_DATE for filtering events
 
@@ -235,6 +267,7 @@ make install
 make run-github
 make run-backlog
 make run-calendar
+make run-notion
 
 # Code quality checks
 make fmt        # Format code
@@ -253,6 +286,10 @@ make check      # Run all checks (fmt, vet)
 - **Backlog API Key**:
     - Generate a key from your Backlog space settings.
     - See Backlog's [API documentation](https://developer.nulab.com/docs/backlog/#api-key) for more details.
+- **Notion Integration Token**:
+    - Create an integration at https://www.notion.so/my-integrations
+    - Copy the Integration Token
+    - Share your workspace pages with the integration
 
 ## Notes
 
@@ -261,3 +298,4 @@ make check      # Run all checks (fmt, vet)
     - GitHub: PRs you were involved in as an author or reviewer, summary of PR counts per organization and repository.
     - Backlog: Activity count by type, unique issues involved, and summaries.
     - Calendar: Event listings with duration indicators, rankings by count/duration/days, all-day event detection.
+    - Notion: Pages you created or updated, with URLs and activity timestamps.

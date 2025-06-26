@@ -52,13 +52,13 @@ type Database struct {
 func makeNotionRequest(url string, token string, body string) ([]byte, error) {
 	var req *http.Request
 	var err error
-	
+
 	if body != "" {
 		req, err = http.NewRequest("POST", url, strings.NewReader(body))
 	} else {
 		req, err = http.NewRequest("GET", url, nil)
 	}
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
@@ -128,7 +128,7 @@ func detectActualUserID(token string) string {
 
 	// Count user IDs from the sample
 	userIDCounts := make(map[string]int)
-	
+
 	for _, result := range response.Results {
 		// Check if this is a page object
 		var objType struct {
@@ -137,39 +137,39 @@ func detectActualUserID(token string) string {
 		if err := json.Unmarshal(result, &objType); err != nil {
 			continue
 		}
-		
+
 		if objType.Object != "page" {
 			continue
 		}
-		
+
 		// Parse as page
 		var page Page
 		if err := json.Unmarshal(result, &page); err != nil {
 			continue
 		}
-		
+
 		// Count created_by user IDs
 		if page.CreatedBy.ID != "" {
 			userIDCounts[page.CreatedBy.ID]++
 		}
-		
+
 		// Count last_edited_by user IDs
 		if page.LastEditedBy.ID != "" {
 			userIDCounts[page.LastEditedBy.ID]++
 		}
 	}
-	
+
 	// Find the most common user ID (likely to be the workspace owner/main user)
 	var mostCommonUserID string
 	maxCount := 0
-	
+
 	for userID, count := range userIDCounts {
 		if count > maxCount {
 			maxCount = count
 			mostCommonUserID = userID
 		}
 	}
-	
+
 	return mostCommonUserID
 }
 
@@ -180,15 +180,15 @@ func parseDatabaseParent(result json.RawMessage) (string, bool) {
 			DatabaseID string `json:"database_id"`
 		} `json:"parent"`
 	}
-	
+
 	if err := json.Unmarshal(result, &parentInfo); err != nil {
 		return "", false
 	}
-	
+
 	if parentInfo.Parent.Type == "database_id" && parentInfo.Parent.DatabaseID != "" {
 		return parentInfo.Parent.DatabaseID, true
 	}
-	
+
 	return "", false
 }
 
@@ -222,15 +222,14 @@ func extractPageTitle(page Page) string {
 			}
 		}
 	}
-	
+
 	// If no title found, fallback to page ID
 	return fmt.Sprintf("Page %s", page.ID[:8])
 }
 
-
 func extractTextFromRichTextArray(richTextArray []interface{}) string {
 	var textParts []string
-	
+
 	for _, item := range richTextArray {
 		if textObj, ok := item.(map[string]interface{}); ok {
 			if plainText, ok := textObj["plain_text"].(string); ok && plainText != "" {
@@ -238,8 +237,24 @@ func extractTextFromRichTextArray(richTextArray []interface{}) string {
 			}
 		}
 	}
-	
+
 	return strings.Join(textParts, "")
+}
+
+func getUserName(userID string, token string) string {
+	url := fmt.Sprintf("%s/users/%s", notionAPIURL, userID)
+	body, err := makeNotionRequest(url, token, "")
+	if err != nil {
+		return ""
+	}
+
+	var user User
+	err = json.Unmarshal(body, &user)
+	if err != nil {
+		return ""
+	}
+
+	return user.Name
 }
 
 func searchPages(token string, userID string, startDate, endDate time.Time) ([]Page, error) {
@@ -248,9 +263,11 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 	requestCount := 0
 	consecutiveOldPages := 0
 	maxConsecutiveOldPages := 500 // 連続して500ページ日付範囲外が続いたら停止（より慎重）
-	
+
 	// Cache for database titles to avoid repeated API calls
 	databaseCache := make(map[string]string)
+	// Cache for user names to avoid repeated API calls
+	userCache := make(map[string]string)
 
 	fmt.Printf("Searching pages (stopping when %d consecutive pages are outside date range)...\n", maxConsecutiveOldPages)
 
@@ -266,7 +283,7 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 			requestBody += fmt.Sprintf(`,
 			"start_cursor": "%s"`, cursor)
 		}
-		
+
 		requestBody += ",\n\"page_size\": 100\n}"
 
 		url := fmt.Sprintf("%s/search", notionAPIURL)
@@ -282,7 +299,7 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 		if err != nil {
 			return nil, fmt.Errorf("error unmarshalling search response: %v", err)
 		}
-		
+
 		// Filter pages by user and date range
 		pagesInRange := 0
 		userPagesFound := 0
@@ -294,30 +311,30 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 			if err := json.Unmarshal(result, &objType); err != nil {
 				continue
 			}
-			
+
 			if objType.Object != "page" {
 				continue // Skip non-page objects
 			}
-			
+
 			// Parse as page
 			var page Page
 			if err := json.Unmarshal(result, &page); err != nil {
 				log.Printf("Warning: failed to parse page: %v", err)
 				continue
 			}
-			
+
 			// Check if user created or edited this page
 			isUserInvolved := (page.CreatedBy.ID == userID) || (page.LastEditedBy.ID == userID)
-			
+
 			// Check if activity happened in date range
 			inDateRange := (page.CreatedTime.After(startDate) && page.CreatedTime.Before(endDate.AddDate(0, 0, 1))) ||
-						 (page.LastEditedTime.After(startDate) && page.LastEditedTime.Before(endDate.AddDate(0, 0, 1)))
-			
+				(page.LastEditedTime.After(startDate) && page.LastEditedTime.Before(endDate.AddDate(0, 0, 1)))
+
 			if inDateRange {
 				pagesInRange++
 				if isUserInvolved {
 					userPagesFound++
-					
+
 					// Try to get database title if this page is in a database
 					if parent, ok := parseDatabaseParent(result); ok && parent != "" {
 						// Check cache first
@@ -335,7 +352,19 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 							}
 						}
 					}
-					
+
+					// Try to get user name if not already available
+					if page.CreatedBy.Name == "" && page.CreatedBy.ID != "" {
+						if cachedName, exists := userCache[page.CreatedBy.ID]; exists {
+							page.CreatedBy.Name = cachedName
+						} else {
+							if userName := getUserName(page.CreatedBy.ID, token); userName != "" {
+								page.CreatedBy.Name = userName
+								userCache[page.CreatedBy.ID] = userName
+							}
+						}
+					}
+
 					page.Title = extractPageTitle(page)
 					allPages = append(allPages, page)
 				}
@@ -414,7 +443,7 @@ func main() {
 	fmt.Println("Auto-detecting user ID from workspace pages...")
 	detectedUserID := detectActualUserID(token)
 	var targetUserID string
-	
+
 	if detectedUserID != "" && detectedUserID != currentUser.ID {
 		fmt.Printf("Detected workspace user ID: %s (different from Integration Token user: %s)\n", detectedUserID, currentUser.ID)
 		targetUserID = detectedUserID
@@ -461,10 +490,10 @@ func main() {
 	for _, page := range updatedPages {
 		fmt.Printf("- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
 		fmt.Printf("  URL: %s\n", page.URL)
-		
+
 		creatorName := page.CreatedBy.Name
 		if creatorName == "" {
-			creatorName = fmt.Sprintf("User ID: %s", page.CreatedBy.ID)
+			creatorName = "-"
 		}
 		fmt.Printf("  Originally created by: %s\n", creatorName)
 		fmt.Println()

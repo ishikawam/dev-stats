@@ -212,6 +212,11 @@ func extractPageTitle(page Page) string {
 func searchPages(token string, userID string, startDate, endDate time.Time) ([]Page, error) {
 	var allPages []Page
 	var cursor string
+	requestCount := 0
+	consecutiveOldPages := 0
+	maxConsecutiveOldPages := 500 // 連続して500ページ日付範囲外が続いたら停止（より慎重）
+
+	fmt.Printf("Searching pages (stopping when %d consecutive pages are outside date range)...\n", maxConsecutiveOldPages)
 
 	for {
 		// Use simple search without user filtering - we'll filter client-side
@@ -229,6 +234,8 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 		requestBody += ",\n\"page_size\": 100\n}"
 
 		url := fmt.Sprintf("%s/search", notionAPIURL)
+		requestCount++
+		fmt.Printf("API Request #%d (fetching up to 100 pages)...", requestCount)
 		body, err := makeNotionRequest(url, token, requestBody)
 		if err != nil {
 			return nil, err
@@ -241,6 +248,8 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 		}
 		
 		// Filter pages by user and date range
+		pagesInRange := 0
+		userPagesFound := 0
 		for _, result := range response.Results {
 			// First check if this is a page object
 			var objType struct {
@@ -268,10 +277,30 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 			inDateRange := (page.CreatedTime.After(startDate) && page.CreatedTime.Before(endDate.AddDate(0, 0, 1))) ||
 						 (page.LastEditedTime.After(startDate) && page.LastEditedTime.Before(endDate.AddDate(0, 0, 1)))
 			
-			if isUserInvolved && inDateRange {
-				page.Title = extractPageTitle(page)
-				allPages = append(allPages, page)
+			if inDateRange {
+				pagesInRange++
+				if isUserInvolved {
+					userPagesFound++
+					page.Title = extractPageTitle(page)
+					allPages = append(allPages, page)
+				}
 			}
+		}
+
+		// 進捗表示
+		fmt.Printf(" found %d/%d pages in date range (%d user pages)\n", pagesInRange, len(response.Results), userPagesFound)
+
+		// 早期終了の条件チェック
+		if pagesInRange == 0 {
+			consecutiveOldPages += len(response.Results)
+		} else {
+			consecutiveOldPages = 0
+		}
+
+		// 連続して古いページが続いた場合は停止
+		if consecutiveOldPages >= maxConsecutiveOldPages {
+			fmt.Printf("Stopped search: %d consecutive pages outside date range (search appears complete)\n", consecutiveOldPages)
+			break
 		}
 
 		if !response.HasMore {
@@ -280,6 +309,7 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 		cursor = response.NextCursor
 	}
 
+	fmt.Printf("Total API requests made: %d\n", requestCount)
 	return allPages, nil
 }
 

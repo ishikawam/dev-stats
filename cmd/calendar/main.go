@@ -221,7 +221,7 @@ func calculateAllDayStats(groupedEvents map[string][]Event) []TitleStats {
 	for title, events := range groupedEvents {
 		allDayCount := 0
 		totalDays := 0
-		
+
 		for _, event := range events {
 			if isAllDayEvent(event) {
 				allDayCount++
@@ -238,12 +238,12 @@ func calculateAllDayStats(groupedEvents map[string][]Event) []TitleStats {
 				}
 			}
 		}
-		
+
 		if allDayCount > 0 {
 			stats = append(stats, TitleStats{
 				Title:    title,
 				Count:    allDayCount,
-				Duration: time.Duration(totalDays * 24) * time.Hour, // Convert days to duration for sorting
+				Duration: time.Duration(totalDays*24) * time.Hour, // Convert days to duration for sorting
 			})
 		}
 	}

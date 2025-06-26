@@ -386,27 +386,4 @@ func main() {
 	fmt.Printf("Total pages updated: %d\n", len(updatedPages))
 	fmt.Printf("Total activity: %d pages\n", len(createdPages)+len(updatedPages))
 
-	// Daily activity analysis
-	dailyActivity := make(map[string]int)
-	for _, page := range createdPages {
-		date := page.LastEditedTime.Format("2006-01-02")
-		dailyActivity[date]++
-	}
-	for _, page := range updatedPages {
-		date := page.LastEditedTime.Format("2006-01-02")
-		dailyActivity[date]++
-	}
-
-	if len(dailyActivity) > 0 {
-		fmt.Println("\nActivity per day:")
-		var sortedDates []string
-		for date := range dailyActivity {
-			sortedDates = append(sortedDates, date)
-		}
-		sort.Strings(sortedDates)
-
-		for _, date := range sortedDates {
-			fmt.Printf("- %s: %d activities\n", date, dailyActivity[date])
-		}
-	}
 }

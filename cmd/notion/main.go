@@ -354,9 +354,9 @@ func main() {
 	// Categorize pages
 	createdPages, updatedPages := categorizePages(pages, targetUserID)
 
-	// Sort pages by time
+	// Sort pages by last edited time
 	sort.Slice(createdPages, func(i, j int) bool {
-		return createdPages[i].CreatedTime.Before(createdPages[j].CreatedTime)
+		return createdPages[i].LastEditedTime.Before(createdPages[j].LastEditedTime)
 	})
 	sort.Slice(updatedPages, func(i, j int) bool {
 		return updatedPages[i].LastEditedTime.Before(updatedPages[j].LastEditedTime)
@@ -367,7 +367,7 @@ func main() {
 
 	fmt.Printf("\nPages you created (%d):\n", len(createdPages))
 	for _, page := range createdPages {
-		fmt.Printf("- %s: %s\n", page.CreatedTime.Format("2006-01-02 15:04"), page.Title)
+		fmt.Printf("- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
 		fmt.Printf("  URL: %s\n", page.URL)
 		fmt.Println()
 	}
@@ -389,7 +389,7 @@ func main() {
 	// Daily activity analysis
 	dailyActivity := make(map[string]int)
 	for _, page := range createdPages {
-		date := page.CreatedTime.Format("2006-01-02")
+		date := page.LastEditedTime.Format("2006-01-02")
 		dailyActivity[date]++
 	}
 	for _, page := range updatedPages {

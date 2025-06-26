@@ -173,6 +173,25 @@ func detectActualUserID(token string) string {
 	return mostCommonUserID
 }
 
+func parseDatabaseParent(result json.RawMessage) (string, bool) {
+	var parentInfo struct {
+		Parent struct {
+			Type       string `json:"type"`
+			DatabaseID string `json:"database_id"`
+		} `json:"parent"`
+	}
+	
+	if err := json.Unmarshal(result, &parentInfo); err != nil {
+		return "", false
+	}
+	
+	if parentInfo.Parent.Type == "database_id" && parentInfo.Parent.DatabaseID != "" {
+		return parentInfo.Parent.DatabaseID, true
+	}
+	
+	return "", false
+}
+
 func getDatabase(databaseID string, token string) (*Database, error) {
 	url := fmt.Sprintf("%s/databases/%s", notionAPIURL, databaseID)
 	body, err := makeNotionRequest(url, token, "")
@@ -190,23 +209,37 @@ func getDatabase(databaseID string, token string) (*Database, error) {
 }
 
 func extractPageTitle(page Page) string {
-	// Try to extract title from properties
-	for key, value := range page.Properties {
-		if strings.ToLower(key) == "title" || strings.ToLower(key) == "name" {
-			if prop, ok := value.(map[string]interface{}); ok {
-				if titleArray, ok := prop["title"].([]interface{}); ok && len(titleArray) > 0 {
-					if titleObj, ok := titleArray[0].(map[string]interface{}); ok {
-						if plainText, ok := titleObj["plain_text"].(string); ok {
-							return plainText
-						}
+	// Look for the actual title property (type: "title")
+	for _, value := range page.Properties {
+		if prop, ok := value.(map[string]interface{}); ok {
+			if propType, exists := prop["type"].(string); exists && propType == "title" {
+				if titleArray, ok := prop["title"].([]interface{}); ok {
+					title := extractTextFromRichTextArray(titleArray)
+					if title != "" {
+						return title
 					}
 				}
 			}
 		}
 	}
 	
-	// Fallback to page ID if no title found
+	// If no title found, fallback to page ID
 	return fmt.Sprintf("Page %s", page.ID[:8])
+}
+
+
+func extractTextFromRichTextArray(richTextArray []interface{}) string {
+	var textParts []string
+	
+	for _, item := range richTextArray {
+		if textObj, ok := item.(map[string]interface{}); ok {
+			if plainText, ok := textObj["plain_text"].(string); ok && plainText != "" {
+				textParts = append(textParts, plainText)
+			}
+		}
+	}
+	
+	return strings.Join(textParts, "")
 }
 
 func searchPages(token string, userID string, startDate, endDate time.Time) ([]Page, error) {
@@ -215,6 +248,9 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 	requestCount := 0
 	consecutiveOldPages := 0
 	maxConsecutiveOldPages := 500 // 連続して500ページ日付範囲外が続いたら停止（より慎重）
+	
+	// Cache for database titles to avoid repeated API calls
+	databaseCache := make(map[string]string)
 
 	fmt.Printf("Searching pages (stopping when %d consecutive pages are outside date range)...\n", maxConsecutiveOldPages)
 
@@ -281,6 +317,25 @@ func searchPages(token string, userID string, startDate, endDate time.Time) ([]P
 				pagesInRange++
 				if isUserInvolved {
 					userPagesFound++
+					
+					// Try to get database title if this page is in a database
+					if parent, ok := parseDatabaseParent(result); ok && parent != "" {
+						// Check cache first
+						if cachedTitle, exists := databaseCache[parent]; exists {
+							page.DatabaseTitle = cachedTitle
+						} else {
+							// Fetch and cache database title
+							if database, err := getDatabase(parent, token); err == nil {
+								if len(database.Title) > 0 {
+									page.DatabaseTitle = database.Title[0].PlainText
+									databaseCache[parent] = page.DatabaseTitle
+								}
+							} else {
+								log.Printf("Warning: Failed to get database %s: %v", parent, err)
+							}
+						}
+					}
+					
 					page.Title = extractPageTitle(page)
 					allPages = append(allPages, page)
 				}
@@ -406,7 +461,12 @@ func main() {
 	for _, page := range updatedPages {
 		fmt.Printf("- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
 		fmt.Printf("  URL: %s\n", page.URL)
-		fmt.Printf("  Originally created by: %s\n", page.CreatedBy.Name)
+		
+		creatorName := page.CreatedBy.Name
+		if creatorName == "" {
+			creatorName = fmt.Sprintf("User ID: %s", page.CreatedBy.ID)
+		}
+		fmt.Printf("  Originally created by: %s\n", creatorName)
 		fmt.Println()
 	}
 

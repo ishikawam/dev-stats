@@ -3,6 +3,7 @@ package calendar
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -91,18 +92,19 @@ func (c *CalendarAnalyzer) ValidateConfig() error {
 }
 
 // Analyze performs Calendar analysis
-func (c *CalendarAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult, error) {
+func (c *CalendarAnalyzer) Analyze(config *common.Config, writer io.Writer) (*common.AnalysisResult, error) {
 	if err := c.ValidateConfig(); err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("Analyzing calendar events from directory: %s\n", c.calendarDir)
+	fmt.Fprintf(writer, "Analyzing calendar events from directory: %s\n", c.calendarDir)
 
 	// Read all ICS files
-	allEvents, err := c.readAllICSFiles()
+	allEvents, err := c.readAllICSFiles(writer)
 	if err != nil {
 		return nil, common.WrapError(err, "failed to read ICS files")
 	}
+
 
 	// Filter events by date range
 	filteredEvents := c.filterEventsByDateRange(allEvents, config.StartDate, config.EndDate)
@@ -148,11 +150,11 @@ func (c *CalendarAnalyzer) Analyze(config *common.Config) (*common.AnalysisResul
 		},
 	}
 
-	c.printResults(result, filteredEvents, titleStats, allDayStats, categoryStats, workingHoursStats)
+	c.printResults(writer, result, filteredEvents, titleStats, allDayStats, categoryStats, workingHoursStats)
 	return result, nil
 }
 
-func (c *CalendarAnalyzer) readAllICSFiles() ([]Event, error) {
+func (c *CalendarAnalyzer) readAllICSFiles(writer io.Writer) ([]Event, error) {
 	var allEvents []Event
 
 	err := filepath.Walk(c.calendarDir, func(path string, info os.FileInfo, err error) error {
@@ -160,14 +162,14 @@ func (c *CalendarAnalyzer) readAllICSFiles() ([]Event, error) {
 			return err
 		}
 		if strings.HasSuffix(strings.ToLower(info.Name()), ".ics") {
-			fmt.Printf("Reading calendar file: %s\n", path)
+			fmt.Fprintf(writer, "Reading calendar file: %s\n", path)
 			events, err := c.parseICSFile(path)
 			if err != nil {
-				fmt.Printf("Error parsing ICS file %s: %v\n", path, err)
-				fmt.Printf("Continuing with other files...\n")
+				fmt.Fprintf(writer, "Error parsing ICS file %s: %v\n", path, err)
+				fmt.Fprintf(writer, "Continuing with other files...\n")
 				return nil
 			}
-			fmt.Printf("Successfully parsed %d events from %s\n", len(events), path)
+			fmt.Fprintf(writer, "Successfully parsed %d events from %s\n", len(events), path)
 			allEvents = append(allEvents, events...)
 		}
 		return nil
@@ -177,7 +179,7 @@ func (c *CalendarAnalyzer) readAllICSFiles() ([]Event, error) {
 		return nil, err
 	}
 
-	fmt.Printf("\nTotal events parsed from all files: %d\n", len(allEvents))
+	fmt.Fprintf(writer, "\nTotal events parsed from all files: %d\n", len(allEvents))
 	return allEvents, nil
 }
 
@@ -388,8 +390,8 @@ func (c *CalendarAnalyzer) calculateAllDayStats(groupedEvents map[string][]Event
 	return stats
 }
 
-func (c *CalendarAnalyzer) printResults(result *common.AnalysisResult, events []Event, titleStats, allDayStats []TitleStats, categoryStats *EventCategoryStats, workingHoursStats *WorkingHoursStats) {
-	fmt.Printf("\nCalendar events from %s to %s:\n",
+func (c *CalendarAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, events []Event, titleStats, allDayStats []TitleStats, categoryStats *EventCategoryStats, workingHoursStats *WorkingHoursStats) {
+	fmt.Fprintf(writer, "\nCalendar events from %s to %s:\n",
 		result.StartDate.Format("2006-01-02"),
 		result.EndDate.Format("2006-01-02"))
 
@@ -407,13 +409,13 @@ func (c *CalendarAnalyzer) printResults(result *common.AnalysisResult, events []
 				duration = fmt.Sprintf(" (%dm)", minutes)
 			}
 		}
-		fmt.Printf("- %s: %s%s\n", event.Start.Format("2006-01-02 15:04"), event.Summary, duration)
+		fmt.Fprintf(writer, "- %s: %s%s\n", event.Start.Format("2006-01-02 15:04"), event.Summary, duration)
 	}
 
-	result.PrintSummary()
+	result.PrintSummary(writer)
 
 	// Print title statistics
-	fmt.Println("\nTop events by count:")
+	fmt.Fprintln(writer, "\nTop events by count:")
 	sortedByCount := make([]TitleStats, len(titleStats))
 	copy(sortedByCount, titleStats)
 	sort.Slice(sortedByCount, func(i, j int) bool {
@@ -427,11 +429,11 @@ func (c *CalendarAnalyzer) printResults(result *common.AnalysisResult, events []
 		if hours > 0 || minutes > 0 {
 			durationStr = fmt.Sprintf(" (%dh%dm)", hours, minutes)
 		}
-		fmt.Printf("%2d. %s: %d events%s\n", i+1, stat.Title, stat.Count, durationStr)
+		fmt.Fprintf(writer, "%2d. %s: %d events%s\n", i+1, stat.Title, stat.Count, durationStr)
 	}
 
 	// Print duration statistics
-	fmt.Println("\nTop events by total duration:")
+	fmt.Fprintln(writer, "\nTop events by total duration:")
 	sortedByDuration := make([]TitleStats, len(titleStats))
 	copy(sortedByDuration, titleStats)
 	sort.Slice(sortedByDuration, func(i, j int) bool {
@@ -443,13 +445,13 @@ func (c *CalendarAnalyzer) printResults(result *common.AnalysisResult, events []
 		minutes := int(stat.Duration.Minutes()) % 60
 		if hours > 0 || minutes > 0 {
 			durationStr := fmt.Sprintf("%dh%dm", hours, minutes)
-			fmt.Printf("%2d. %s: %s (%d events)\n", i+1, stat.Title, durationStr, stat.Count)
+			fmt.Fprintf(writer, "%2d. %s: %s (%d events)\n", i+1, stat.Title, durationStr, stat.Count)
 		}
 	}
 
 	// Print all-day event statistics
 	if len(allDayStats) > 0 {
-		fmt.Println("\nAll-day events ranking by total days:")
+		fmt.Fprintln(writer, "\nAll-day events ranking by total days:")
 		sortedByDays := make([]TitleStats, len(allDayStats))
 		copy(sortedByDays, allDayStats)
 		sort.Slice(sortedByDays, func(i, j int) bool {
@@ -458,28 +460,28 @@ func (c *CalendarAnalyzer) printResults(result *common.AnalysisResult, events []
 
 		for i, stat := range sortedByDays {
 			totalDays := int(stat.Duration.Hours() / 24)
-			fmt.Printf("%2d. %s: %d days (%d events)\n", i+1, stat.Title, totalDays, stat.Count)
+			fmt.Fprintf(writer, "%2d. %s: %d days (%d events)\n", i+1, stat.Title, totalDays, stat.Count)
 		}
 	}
 
 	// Print enhanced category analysis
-	fmt.Println("\nWork Category Analysis:")
-	fmt.Printf("- Meeting time: %s\n", c.formatDuration(categoryStats.MeetingTime))
-	fmt.Printf("- Focus time: %s\n", c.formatDuration(categoryStats.FocusTime))
-	fmt.Printf("- Learning time: %s\n", c.formatDuration(categoryStats.LearningTime))
-	fmt.Printf("- Admin time: %s\n", c.formatDuration(categoryStats.AdminTime))
+	fmt.Fprintln(writer, "\nWork Category Analysis:")
+	fmt.Fprintf(writer, "- Meeting time: %s\n", c.formatDuration(categoryStats.MeetingTime))
+	fmt.Fprintf(writer, "- Focus time: %s\n", c.formatDuration(categoryStats.FocusTime))
+	fmt.Fprintf(writer, "- Learning time: %s\n", c.formatDuration(categoryStats.LearningTime))
+	fmt.Fprintf(writer, "- Admin time: %s\n", c.formatDuration(categoryStats.AdminTime))
 
-	fmt.Println("\nWorking Hours Analysis:")
-	fmt.Printf("- Total working hours: %s\n", c.formatDuration(workingHoursStats.TotalWorkingHours))
+	fmt.Fprintln(writer, "\nWorking Hours Analysis:")
+	fmt.Fprintf(writer, "- Total working hours: %s\n", c.formatDuration(workingHoursStats.TotalWorkingHours))
 	if len(workingHoursStats.PeakHours) > 0 {
-		fmt.Printf("- Peak activity hours: ")
+		fmt.Fprintf(writer, "- Peak activity hours: ")
 		for i, hour := range workingHoursStats.PeakHours {
 			if i > 0 {
-				fmt.Print(", ")
+				fmt.Fprint(writer, ", ")
 			}
-			fmt.Printf("%02d:00", hour)
+			fmt.Fprintf(writer, "%02d:00", hour)
 		}
-		fmt.Println()
+		fmt.Fprintln(writer)
 	}
 }
 

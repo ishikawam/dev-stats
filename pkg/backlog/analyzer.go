@@ -1,15 +1,15 @@
 package backlog
 
 import (
+	"dev-stats/pkg/common"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"sort"
 	"strconv"
 	"time"
-
-	"dev-stats/pkg/common"
 )
 
 // BacklogAnalyzer implements the Analyzer interface for Backlog
@@ -75,7 +75,7 @@ func (b *BacklogAnalyzer) GetName() string {
 }
 
 // ValidateConfig validates the required configuration
-func (b *BacklogAnalyzer) ValidateConfig() error {
+func (b *BacklogAnalyzer) ValidateConfig(writer io.Writer) error {
 	if b.apiKey == "" {
 		return common.NewError("BACKLOG_API_KEY environment variable is required")
 	}
@@ -90,7 +90,7 @@ func (b *BacklogAnalyzer) ValidateConfig() error {
 	}
 
 	// Test API connectivity with helpful error messages
-	fmt.Printf("Testing Backlog API connection to: https://%s.backlog.com\n", b.spaceName)
+	fmt.Fprintf(writer, "Testing Backlog API connection to: https://%s.backlog.com\n", b.spaceName)
 	testURL := fmt.Sprintf("https://%s.backlog.com/api/v2/space", b.spaceName)
 	params := url.Values{}
 	params.Set("apiKey", b.apiKey)
@@ -105,20 +105,21 @@ func (b *BacklogAnalyzer) ValidateConfig() error {
 			"3. Your Backlog URL should be: https://%s.backlog.com\n"+
 			"4. API key has proper permissions", b.spaceName, b.spaceName)
 	}
-	fmt.Printf("✓ Backlog API connection successful\n")
+	fmt.Fprintf(writer, "✓ Backlog API connection successful\n")
 
 	return nil
 }
 
 // Analyze performs Backlog analysis
-func (b *BacklogAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult, error) {
-	if err := b.ValidateConfig(); err != nil {
+func (b *BacklogAnalyzer) Analyze(config *common.Config, writer io.Writer) (*common.AnalysisResult, error) {
+	if err := b.ValidateConfig(writer); err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("Analyzing Backlog activity for user ID: %s\n", b.userID)
-	fmt.Printf("Space: %s, Project ID: %s\n", b.spaceName, b.projectID)
-	fmt.Printf("Date range: %s to %s\n", config.StartDate.Format("2006-01-02"), config.EndDate.Format("2006-01-02"))
+	fmt.Fprintf(writer, "Analyzing Backlog activity for user ID: %s\n", b.userID)
+	fmt.Fprintf(writer, "Space: %s, Project ID: %s\n", b.spaceName, b.projectID)
+	fmt.Fprintf(writer, "Date range: %s to %s\n", config.StartDate.Format("2006-01-02"), config.EndDate.Format("2006-01-02"))
+
 
 	// Get issues created by user
 	createdIssues, err := b.getIssuesCreatedByUser(config.StartDate, config.EndDate)
@@ -139,7 +140,7 @@ func (b *BacklogAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult
 	}
 
 	// Analyze activities
-	activityStats := b.analyzeActivities(activities)
+	activityStats := b.analyzeActivities(writer, activities)
 
 	// Create result
 	result := &common.AnalysisResult{
@@ -160,7 +161,7 @@ func (b *BacklogAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult
 		},
 	}
 
-	b.printResults(result, createdIssues, assignedIssues, activityStats)
+	b.printResults(writer, result, createdIssues, assignedIssues, activityStats)
 	return result, nil
 }
 
@@ -270,7 +271,7 @@ func (b *BacklogAnalyzer) getUserActivities(startDate, endDate time.Time) ([]Act
 	return allActivities, nil
 }
 
-func (b *BacklogAnalyzer) analyzeActivities(activities []Activity) map[string]int {
+func (b *BacklogAnalyzer) analyzeActivities(writer io.Writer, activities []Activity) map[string]int {
 	// Activity types based on official Backlog API documentation
 	// https://developer.nulab.com/docs/backlog/api/2/get-activity/
 	activityTypes := map[int]string{
@@ -327,43 +328,43 @@ func (b *BacklogAnalyzer) analyzeActivities(activities []Activity) map[string]in
 
 	// Print unknown activity types with examples for debugging
 	if len(unknownTypes) > 0 {
-		fmt.Println("\nUnknown activity types found:")
+		fmt.Fprintln(writer, "\nUnknown activity types found:")
 		for actType, examples := range unknownTypes {
-			fmt.Printf("  Type %d: %v\n", actType, examples)
+			fmt.Fprintf(writer, "  Type %d: %v\n", actType, examples)
 		}
 	}
 
 	return stats
 }
 
-func (b *BacklogAnalyzer) printResults(result *common.AnalysisResult, createdIssues, assignedIssues []Issue, activityStats map[string]int) {
-	fmt.Printf("\nBacklog activity from %s to %s:\n",
+func (b *BacklogAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, createdIssues, assignedIssues []Issue, activityStats map[string]int) {
+	fmt.Fprintf(writer, "\nBacklog activity from %s to %s:\n",
 		result.StartDate.Format("2006-01-02"),
 		result.EndDate.Format("2006-01-02"))
 
-	fmt.Printf("\nIssues you created (%d):\n", len(createdIssues))
+	fmt.Fprintf(writer, "\nIssues you created (%d):\n", len(createdIssues))
 	for _, issue := range createdIssues {
-		fmt.Printf("- %s: %s\n", issue.Created.Format("2006-01-02 15:04"), issue.Summary)
-		fmt.Printf("  Type: %s\n", issue.IssueType.Name)
-		fmt.Printf("  Status: %s\n", issue.Status.Name)
-		fmt.Println()
+		fmt.Fprintf(writer, "- %s: %s\n", issue.Created.Format("2006-01-02 15:04"), issue.Summary)
+		fmt.Fprintf(writer, "  Type: %s\n", issue.IssueType.Name)
+		fmt.Fprintf(writer, "  Status: %s\n", issue.Status.Name)
+		fmt.Fprintln(writer)
 	}
 
-	fmt.Printf("Issues assigned to you (%d):\n", len(assignedIssues))
+	fmt.Fprintf(writer, "Issues assigned to you (%d):\n", len(assignedIssues))
 	for _, issue := range assignedIssues {
-		fmt.Printf("- %s: %s\n", issue.Created.Format("2006-01-02 15:04"), issue.Summary)
-		fmt.Printf("  Type: %s\n", issue.IssueType.Name)
-		fmt.Printf("  Status: %s\n", issue.Status.Name)
+		fmt.Fprintf(writer, "- %s: %s\n", issue.Created.Format("2006-01-02 15:04"), issue.Summary)
+		fmt.Fprintf(writer, "  Type: %s\n", issue.IssueType.Name)
+		fmt.Fprintf(writer, "  Status: %s\n", issue.Status.Name)
 		if issue.CreatedUser.ID != 0 {
-			fmt.Printf("  Created by: %s\n", issue.CreatedUser.Name)
+			fmt.Fprintf(writer, "  Created by: %s\n", issue.CreatedUser.Name)
 		}
-		fmt.Println()
+		fmt.Fprintln(writer)
 	}
 
-	result.PrintSummary()
+	result.PrintSummary(writer)
 
 	// Print activity stats
-	fmt.Println("\nActivity count by type:")
+	fmt.Fprintln(writer, "\nActivity count by type:")
 	type activityStat struct {
 		name  string
 		count int
@@ -376,6 +377,6 @@ func (b *BacklogAnalyzer) printResults(result *common.AnalysisResult, createdIss
 		return sortedStats[i].count > sortedStats[j].count
 	})
 	for i, stat := range sortedStats {
-		fmt.Printf("- %d. %s: %d\n", i+1, stat.name, stat.count)
+		fmt.Fprintf(writer, "- %d. %s: %d\n", i+1, stat.name, stat.count)
 	}
 }

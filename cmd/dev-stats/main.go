@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"io"
@@ -97,64 +96,33 @@ func main() {
 	// Run analyzers
 	var results []*common.AnalysisResult
 	for _, analyzer := range analyzersToRun {
-		// Print header to console immediately for real-time progress
-		fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
-		fmt.Printf("Running %s analyzer...\n", analyzer.GetName())
-		fmt.Printf(strings.Repeat("=", 60) + "\n")
+		analyzerName := strings.ToLower(strings.ReplaceAll(analyzer.GetName(), " ", "-"))
+		filename := fmt.Sprintf("%s-stats.txt", analyzerName)
+		filePath := filepath.Join(outputDir, filename)
 
-		// Capture output for file saving
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		// Create file writer
+		file, err := os.Create(filePath)
+		if err != nil {
+			log.Printf("Warning: Failed to create output file %s: %v", filePath, err)
+			continue
+		}
+		defer file.Close()
 
-		// Buffer to capture output
-		var outputBuffer bytes.Buffer
-		done := make(chan bool)
-		go func() {
-			io.Copy(&outputBuffer, r)
-			done <- true
-		}()
+		// Create multi-writer to write to both stdout and file
+		writer := io.MultiWriter(os.Stdout, file)
 
-		result, err := analyzer.Analyze(config)
+		// Print header
+		fmt.Fprintf(writer, "\n"+strings.Repeat("=", 60)+"\n")
+		fmt.Fprintf(writer, "Running %s analyzer...\n", analyzer.GetName())
+		fmt.Fprintf(writer, strings.Repeat("=", 60)+"\n")
 
-		// Restore stdout and close pipe
-		w.Close()
-		os.Stdout = originalStdout
-		<-done
-		r.Close()
-
+		result, err := analyzer.Analyze(config, writer)
 		if err != nil {
 			log.Printf("Error running %s analyzer: %v", analyzer.GetName(), err)
 			continue
 		}
 
-		// Print captured output to console and save to file
-		output := outputBuffer.String()
-		// Skip printing the header again since we already showed it
-		outputLines := strings.Split(output, "\n")
-		var filteredOutput []string
-		skipLines := 0
-		for i, line := range outputLines {
-			// Skip the header lines that match our format
-			if i < 3 && (strings.Contains(line, "=") || strings.Contains(line, "Running") || line == "") {
-				skipLines++
-				continue
-			}
-			filteredOutput = append(filteredOutput, line)
-		}
-		cleanOutput := strings.Join(filteredOutput, "\n")
-		fmt.Print(cleanOutput)
-
-		// Save full output (including header) to file
-		analyzerName := strings.ToLower(strings.ReplaceAll(analyzer.GetName(), " ", "-"))
-		filename := fmt.Sprintf("%s-stats.txt", analyzerName)
-		filepath := filepath.Join(outputDir, filename)
-
-		if err := saveOutputToFile(filepath, output); err != nil {
-			log.Printf("Warning: Failed to save %s output to file: %v", analyzer.GetName(), err)
-		} else {
-			fmt.Printf("\n📁 Output saved to: %s\n", filepath)
-		}
+		fmt.Fprintf(writer, "\n📁 Output saved to: %s\n", filePath)
 
 		results = append(results, result)
 	}
@@ -181,17 +149,7 @@ func createOutputDirectory(startDate, endDate time.Time) string {
 	return outputDir
 }
 
-// saveOutputToFile saves the output string to a file
-func saveOutputToFile(filepath, output string) error {
-	file, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 
-	_, err = file.WriteString(output)
-	return err
-}
 
 func printHelp() {
 	fmt.Println("dev-stats - Development Statistics Analyzer")

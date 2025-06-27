@@ -2,20 +2,15 @@ package common
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"time"
 )
 
 // Analyzer defines the interface that all analysis tools must implement
 type Analyzer interface {
-	// GetName returns the name of the analyzer
 	GetName() string
-
-	// Analyze performs the analysis and returns the results
-	Analyze(config *Config) (*AnalysisResult, error)
-
-	// ValidateConfig validates that the analyzer has the required configuration
-	ValidateConfig() error
+	Analyze(config *Config, writer io.Writer) (*AnalysisResult, error)
 }
 
 // AnalysisResult contains the results of an analysis
@@ -36,8 +31,8 @@ type AnalysisStats struct {
 }
 
 // PrintSummary prints a formatted summary of the analysis result
-func (r *AnalysisResult) PrintSummary() {
-	fmt.Printf("\n%s summary from %s to %s:\n",
+func (r *AnalysisResult) PrintSummary(writer io.Writer) {
+	fmt.Fprintf(writer, "\n%s summary from %s to %s:\n",
 		r.AnalyzerName,
 		r.StartDate.Format("2006-01-02"),
 		r.EndDate.Format("2006-01-02"))
@@ -50,6 +45,6 @@ func (r *AnalysisResult) PrintSummary() {
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		fmt.Printf("%s: %v\n", key, r.Summary[key])
+		fmt.Fprintf(writer, "%s: %v\n", key, r.Summary[key])
 	}
 }

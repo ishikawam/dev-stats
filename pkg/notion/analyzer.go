@@ -3,6 +3,7 @@ package notion
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -110,7 +111,7 @@ func (n *NotionAnalyzer) ValidateConfig() error {
 }
 
 // Analyze performs Notion analysis
-func (n *NotionAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult, error) {
+func (n *NotionAnalyzer) Analyze(config *common.Config, writer io.Writer) (*common.AnalysisResult, error) {
 	if err := n.ValidateConfig(); err != nil {
 		return nil, err
 	}
@@ -125,27 +126,28 @@ func (n *NotionAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult,
 		return nil, common.WrapError(err, "failed to get current user")
 	}
 
-	fmt.Printf("Analyzing Notion activity for user: %s (ID: %s)\n", currentUser.Name, currentUser.ID)
+	fmt.Fprintf(writer, "Analyzing Notion activity for user: %s (ID: %s)\n", currentUser.Name, currentUser.ID)
 
 	// Auto-detect the actual user ID
-	fmt.Println("Auto-detecting user ID from workspace pages...")
-	detectedUserID := n.detectActualUserID()
+	fmt.Fprintln(writer, "Auto-detecting user ID from workspace pages...")
+	detectedUserID := n.detectActualUserID(writer)
 	var targetUserID string
 
 	if detectedUserID != "" && detectedUserID != currentUser.ID {
-		fmt.Printf("Detected workspace user ID: %s (different from Integration Token user: %s)\n", detectedUserID, currentUser.ID)
+		fmt.Fprintf(writer, "Detected workspace user ID: %s (different from Integration Token user: %s)\n", detectedUserID, currentUser.ID)
 		targetUserID = detectedUserID
 	} else {
-		fmt.Printf("Using Integration Token user ID: %s\n", currentUser.ID)
+		fmt.Fprintf(writer, "Using Integration Token user ID: %s\n", currentUser.ID)
 		targetUserID = currentUser.ID
 	}
 
 	// Search for pages
-	fmt.Println("Searching for pages...")
-	pages, err := n.searchPages(targetUserID, config.StartDate, config.EndDate)
+	fmt.Fprintln(writer, "Searching for pages...")
+	pages, err := n.searchPages(writer, targetUserID, config.StartDate, config.EndDate)
 	if err != nil {
 		return nil, common.WrapError(err, "failed to search pages")
 	}
+
 
 	// Categorize pages
 	createdPages, updatedPages := n.categorizePages(pages, targetUserID)
@@ -181,7 +183,7 @@ func (n *NotionAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult,
 		},
 	}
 
-	n.printResults(result, createdPages, updatedPages, targetUserID, categoryStats, workPatterns)
+	n.printResults(writer, result, createdPages, updatedPages, targetUserID, categoryStats, workPatterns)
 	return result, nil
 }
 
@@ -200,7 +202,7 @@ func (n *NotionAnalyzer) getCurrentUser() (*User, error) {
 	return &user, nil
 }
 
-func (n *NotionAnalyzer) detectActualUserID() string {
+func (n *NotionAnalyzer) detectActualUserID(writer io.Writer) string {
 	requestBody := `{
 		"sort": {
 			"direction": "descending",
@@ -212,13 +214,13 @@ func (n *NotionAnalyzer) detectActualUserID() string {
 	url := fmt.Sprintf("%s/search", notionAPIURL)
 	body, err := n.client.Post(url, requestBody, nil)
 	if err != nil {
-		fmt.Printf("Warning: Failed to auto-detect user ID: %v\n", err)
+		fmt.Fprintf(writer, "Warning: Failed to auto-detect user ID: %v\n", err)
 		return ""
 	}
 
 	var response SearchResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		fmt.Printf("Warning: Failed to parse search response for auto-detection: %v\n", err)
+		fmt.Fprintf(writer, "Warning: Failed to parse search response for auto-detection: %v\n", err)
 		return ""
 	}
 
@@ -264,7 +266,7 @@ func (n *NotionAnalyzer) detectActualUserID() string {
 	return mostCommonUserID
 }
 
-func (n *NotionAnalyzer) searchPages(userID string, startDate, endDate time.Time) ([]Page, error) {
+func (n *NotionAnalyzer) searchPages(writer io.Writer, userID string, startDate, endDate time.Time) ([]Page, error) {
 	var allPages []Page
 	var cursor string
 	requestCount := 0
@@ -275,25 +277,29 @@ func (n *NotionAnalyzer) searchPages(userID string, startDate, endDate time.Time
 	databaseCache := make(map[string]string)
 	userCache := make(map[string]string)
 
-	fmt.Printf("Searching pages (stopping when %d consecutive pages are outside date range)...\n", maxConsecutiveOldPages)
+	fmt.Fprintf(writer, "Searching pages (stopping when %d consecutive pages are outside date range)...\n", maxConsecutiveOldPages)
 
-	for {
-		requestBody := `{
-			"sort": {
-				"direction": "descending",
-				"timestamp": "last_edited_time"
-			}`
+    for {
+        var requestBodyBuilder strings.Builder
+        requestBodyBuilder.WriteString(`{
+            "sort": {
+                "direction": "descending",
+                "timestamp": "last_edited_time"
+            }`)
 
-		if cursor != "" {
-			requestBody += fmt.Sprintf(`,
-			"start_cursor": "%s"`, cursor)
-		}
+        if cursor != "" {
+            requestBodyBuilder.WriteString(fmt.Sprintf(`,
+            "start_cursor": "%s"`, cursor))
+        }
 
-		requestBody += ",\n\"page_size\": 100\n}"
+        requestBodyBuilder.WriteString(`,
+            "page_size": 100
+}`)
+        requestBody := requestBodyBuilder.String()
 
-		url := fmt.Sprintf("%s/search", notionAPIURL)
-		requestCount++
-		fmt.Printf("API Request #%d (fetching up to 100 pages)...", requestCount)
+        url := fmt.Sprintf("%s/search", notionAPIURL)
+        requestCount++
+        fmt.Fprintf(writer, "API Request #%d (fetching up to 100 pages)...", requestCount)
 
 		body, err := n.client.Post(url, requestBody, nil)
 		if err != nil {
@@ -369,7 +375,7 @@ func (n *NotionAnalyzer) searchPages(userID string, startDate, endDate time.Time
 			}
 		}
 
-		fmt.Printf(" found %d/%d pages in date range (%d user pages)\n", pagesInRange, len(response.Results), userPagesFound)
+		fmt.Fprintf(writer, " found %d/%d pages in date range (%d user pages)\n", pagesInRange, len(response.Results), userPagesFound)
 
 		// Early termination condition check
 		if pagesInRange == 0 {
@@ -379,7 +385,7 @@ func (n *NotionAnalyzer) searchPages(userID string, startDate, endDate time.Time
 		}
 
 		if consecutiveOldPages >= maxConsecutiveOldPages {
-			fmt.Printf("Stopped search: %d consecutive pages outside date range (search appears complete)\n", consecutiveOldPages)
+			fmt.Fprintf(writer, "Stopped search: %d consecutive pages outside date range (search appears complete)\n", consecutiveOldPages)
 			break
 		}
 
@@ -389,7 +395,7 @@ func (n *NotionAnalyzer) searchPages(userID string, startDate, endDate time.Time
 		cursor = response.NextCursor
 	}
 
-	fmt.Printf("Total API requests made: %d\n", requestCount)
+	fmt.Fprintf(writer, "Total API requests made: %d\n", requestCount)
 	return allPages, nil
 }
 
@@ -487,12 +493,12 @@ func (n *NotionAnalyzer) categorizePages(pages []Page, userID string) (created [
 	return created, updated
 }
 
-func (n *NotionAnalyzer) printResults(result *common.AnalysisResult, createdPages, updatedPages []Page, targetUserID string, categoryStats *CategoryStats, workPatterns *WorkPatterns) {
+func (n *NotionAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, createdPages, updatedPages []Page, targetUserID string, categoryStats *CategoryStats, workPatterns *WorkPatterns) {
 	userIDDisplay := targetUserID
 	if len(targetUserID) > 8 {
 		userIDDisplay = targetUserID[:8]
 	}
-	fmt.Printf("Found %d pages where user %s was involved\n", len(createdPages)+len(updatedPages), userIDDisplay)
+	fmt.Fprintf(writer, "Found %d pages where user %s was involved\n", len(createdPages)+len(updatedPages), userIDDisplay)
 
 	// Sort pages by last edited time
 	sort.Slice(createdPages, func(i, j int) bool {
@@ -502,32 +508,32 @@ func (n *NotionAnalyzer) printResults(result *common.AnalysisResult, createdPage
 		return updatedPages[i].LastEditedTime.Before(updatedPages[j].LastEditedTime)
 	})
 
-	fmt.Printf("\nNotion activity from %s to %s:\n",
+	fmt.Fprintf(writer, "\nNotion activity from %s to %s:\n",
 		result.StartDate.Format("2006-01-02"),
 		result.EndDate.Format("2006-01-02"))
 
-	fmt.Printf("\nPages you created (%d):\n", len(createdPages))
+	fmt.Fprintf(writer, "\nPages you created (%d):\n", len(createdPages))
 	for _, page := range createdPages {
-		fmt.Printf("- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
-		fmt.Printf("  URL: %s\n", page.URL)
-		fmt.Println()
+		fmt.Fprintf(writer, "- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
+		fmt.Fprintf(writer, "  URL: %s\n", page.URL)
+		fmt.Fprintln(writer)
 	}
 
-	fmt.Printf("Pages you updated (%d):\n", len(updatedPages))
+	fmt.Fprintf(writer, "Pages you updated (%d):\n", len(updatedPages))
 	for _, page := range updatedPages {
-		fmt.Printf("- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
-		fmt.Printf("  URL: %s\n", page.URL)
+		fmt.Fprintf(writer, "- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
+		fmt.Fprintf(writer, "  URL: %s\n", page.URL)
 
 		creatorName := page.CreatedBy.Name
 		if creatorName == "" {
 			creatorName = "-"
 		}
-		fmt.Printf("  Originally created by: %s\n", creatorName)
-		fmt.Println()
+		fmt.Fprintf(writer, "  Originally created by: %s\n", creatorName)
+		fmt.Fprintln(writer)
 	}
 
 	// Print category analysis
-	fmt.Println("\nWork Category Analysis:")
+	fmt.Fprintln(writer, "\nWork Category Analysis:")
 	// Sort categories for deterministic output
 	var categories []string
 	for category := range categoryStats.Categories {
@@ -536,15 +542,15 @@ func (n *NotionAnalyzer) printResults(result *common.AnalysisResult, createdPage
 	sort.Strings(categories)
 
 	for _, category := range categories {
-		fmt.Printf("- %s: %d pages\n", category, categoryStats.Categories[category])
+		fmt.Fprintf(writer, "- %s: %d pages\n", category, categoryStats.Categories[category])
 	}
 
 	// Print work patterns
-	fmt.Printf("\nWork Patterns:\n")
-	fmt.Printf("- Peak activity hour: %02d:00\n", workPatterns.PeakHour)
-	fmt.Printf("- Peak activity day: %s\n", workPatterns.PeakDay)
+	fmt.Fprintf(writer, "\nWork Patterns:\n")
+	fmt.Fprintf(writer, "- Peak activity hour: %02d:00\n", workPatterns.PeakHour)
+	fmt.Fprintf(writer, "- Peak activity day: %s\n", workPatterns.PeakDay)
 
-	result.PrintSummary()
+	result.PrintSummary(writer)
 }
 
 // analyzeCategoryStats analyzes page categories based on titles and content

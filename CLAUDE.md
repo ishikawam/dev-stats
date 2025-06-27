@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ IMPORTANT RULES
+
+**NEVER COMMIT CODE WITHOUT EXPLICIT USER REQUEST**
+- Do NOT run `git commit` unless the user explicitly asks to commit
+- Do NOT run `git add` and `git commit` automatically
+- Always ask for confirmation before committing changes
+- The user wants to review changes before they are committed to version control
+- This rule is non-negotiable and must be followed at all times
+
 ## Project Overview
 
 A Go-based tool that analyzes GitHub, Backlog, Calendar, and Notion productivity by fetching and summarizing activity data within specified date ranges. The tool provides statistics on pull requests, issues, activities, calendar events, and Notion pages across different repositories, organizations, and time periods.

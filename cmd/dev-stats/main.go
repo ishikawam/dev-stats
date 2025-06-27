@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"dev-stats/pkg/backlog"
 	"dev-stats/pkg/calendar"
@@ -78,6 +82,10 @@ func main() {
 		config.StartDate.Format("2006-01-02"),
 		config.EndDate.Format("2006-01-02"))
 
+	// Create output directory
+	outputDir := createOutputDirectory(config.StartDate, config.EndDate)
+	fmt.Printf("Output directory: %s\n", outputDir)
+
 	// Run analyzers
 	var results []*common.AnalysisResult
 	for _, analyzer := range analyzersToRun {
@@ -85,10 +93,45 @@ func main() {
 		fmt.Printf("Running %s analyzer...\n", analyzer.GetName())
 		fmt.Printf(strings.Repeat("=", 60) + "\n")
 
+		// Capture output
+		originalStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		// Buffer to capture output
+		var outputBuffer bytes.Buffer
+		done := make(chan bool)
+		go func() {
+			io.Copy(&outputBuffer, r)
+			done <- true
+		}()
+
 		result, err := analyzer.Analyze(config)
+
+		// Restore stdout and close pipe
+		w.Close()
+		os.Stdout = originalStdout
+		<-done
+		r.Close()
+
 		if err != nil {
 			log.Printf("Error running %s analyzer: %v", analyzer.GetName(), err)
 			continue
+		}
+
+		// Print to console and save to file
+		output := outputBuffer.String()
+		fmt.Print(output)
+
+		// Save to file
+		analyzerName := strings.ToLower(strings.ReplaceAll(analyzer.GetName(), " ", "-"))
+		filename := fmt.Sprintf("%s-stats.txt", analyzerName)
+		filepath := filepath.Join(outputDir, filename)
+
+		if err := saveOutputToFile(filepath, output); err != nil {
+			log.Printf("Warning: Failed to save %s output to file: %v", analyzer.GetName(), err)
+		} else {
+			fmt.Printf("\n📁 Output saved to: %s\n", filepath)
 		}
 
 		results = append(results, result)
@@ -100,6 +143,32 @@ func main() {
 	}
 
 	fmt.Println("\nAnalysis completed successfully!")
+}
+
+// createOutputDirectory creates a directory for storing output files
+func createOutputDirectory(startDate, endDate time.Time) string {
+	outputDir := fmt.Sprintf("stats/%s_to_%s",
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"))
+
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create output directory %s: %v", outputDir, err)
+		return "."
+	}
+
+	return outputDir
+}
+
+// saveOutputToFile saves the output string to a file
+func saveOutputToFile(filepath, output string) error {
+	file, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(output)
+	return err
 }
 
 func printHelp() {

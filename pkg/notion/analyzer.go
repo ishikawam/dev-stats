@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"dev-stats/pkg/common"
+	"dev-stats/pkg/config"
 )
 
 const (
@@ -18,8 +19,9 @@ const (
 
 // NotionAnalyzer implements the Analyzer interface for Notion
 type NotionAnalyzer struct {
-	token  string
-	client *common.HTTPClient
+	token          string
+	client         *common.HTTPClient
+	categoryConfig *config.CategorizationConfig
 }
 
 // User represents a Notion user
@@ -57,12 +59,40 @@ type Database struct {
 	} `json:"title"`
 }
 
+// CategoryStats represents analysis of page categories
+type CategoryStats struct {
+	Categories      map[string]int `json:"categories"`
+	DailyWorkLogs   int            `json:"daily_work_logs"`
+	MeetingNotes    int            `json:"meeting_notes"`
+	TechnicalDocs   int            `json:"technical_docs"`
+	ProjectPlanning int            `json:"project_planning"`
+}
+
+// WorkPatterns represents work activity patterns
+type WorkPatterns struct {
+	HourlyActivity map[int]int    `json:"hourly_activity"`
+	DailyActivity  map[string]int `json:"daily_activity"`
+	PeakHour       int            `json:"peak_hour"`
+	PeakDay        string         `json:"peak_day"`
+}
+
 // NewNotionAnalyzer creates a new Notion analyzer
 func NewNotionAnalyzer() *NotionAnalyzer {
 	client := common.NewHTTPClient()
+
+	// Load category configuration
+	categoryConfig, err := config.LoadCategorizationConfig("")
+	if err != nil {
+		// Return nil to indicate initialization failure
+		// The caller should handle this error
+		fmt.Printf("Error: Failed to load category config: %v\n", err)
+		return nil
+	}
+
 	return &NotionAnalyzer{
-		token:  os.Getenv("NOTION_TOKEN"),
-		client: client,
+		token:          os.Getenv("NOTION_TOKEN"),
+		client:         client,
+		categoryConfig: categoryConfig,
 	}
 }
 
@@ -120,25 +150,38 @@ func (n *NotionAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult,
 	// Categorize pages
 	createdPages, updatedPages := n.categorizePages(pages, targetUserID)
 
+	// Analyze categories and patterns
+	categoryStats := n.analyzeCategoryStats(createdPages, updatedPages)
+	workPatterns := n.analyzeWorkPatterns(createdPages, updatedPages)
+
 	// Create result
 	result := &common.AnalysisResult{
 		AnalyzerName: n.GetName(),
 		StartDate:    config.StartDate,
 		EndDate:      config.EndDate,
 		Summary: map[string]interface{}{
-			"Pages created":     len(createdPages),
-			"Pages updated":     len(updatedPages),
-			"Total activity":    len(createdPages) + len(updatedPages),
-			"Total pages found": len(pages),
+			"Pages created":      len(createdPages),
+			"Pages updated":      len(updatedPages),
+			"Total activity":     len(createdPages) + len(updatedPages),
+			"Total pages found":  len(pages),
+			"Work categories":    len(categoryStats.Categories),
+			"Daily work logs":    categoryStats.DailyWorkLogs,
+			"Meeting notes":      categoryStats.MeetingNotes,
+			"Technical docs":     categoryStats.TechnicalDocs,
+			"Project planning":   categoryStats.ProjectPlanning,
+			"Peak activity day":  workPatterns.PeakDay,
+			"Peak activity hour": workPatterns.PeakHour,
 		},
 		Details: map[string]interface{}{
-			"created_pages": createdPages,
-			"updated_pages": updatedPages,
-			"all_pages":     pages,
+			"created_pages":  createdPages,
+			"updated_pages":  updatedPages,
+			"all_pages":      pages,
+			"category_stats": categoryStats,
+			"work_patterns":  workPatterns,
 		},
 	}
 
-	n.printResults(result, createdPages, updatedPages, targetUserID)
+	n.printResults(result, createdPages, updatedPages, targetUserID, categoryStats, workPatterns)
 	return result, nil
 }
 
@@ -444,7 +487,7 @@ func (n *NotionAnalyzer) categorizePages(pages []Page, userID string) (created [
 	return created, updated
 }
 
-func (n *NotionAnalyzer) printResults(result *common.AnalysisResult, createdPages, updatedPages []Page, targetUserID string) {
+func (n *NotionAnalyzer) printResults(result *common.AnalysisResult, createdPages, updatedPages []Page, targetUserID string, categoryStats *CategoryStats, workPatterns *WorkPatterns) {
 	userIDDisplay := targetUserID
 	if len(targetUserID) > 8 {
 		userIDDisplay = targetUserID[:8]
@@ -483,5 +526,97 @@ func (n *NotionAnalyzer) printResults(result *common.AnalysisResult, createdPage
 		fmt.Println()
 	}
 
+	// Print category analysis
+	fmt.Println("\nWork Category Analysis:")
+	// Sort categories for deterministic output
+	var categories []string
+	for category := range categoryStats.Categories {
+		categories = append(categories, category)
+	}
+	sort.Strings(categories)
+
+	for _, category := range categories {
+		fmt.Printf("- %s: %d pages\n", category, categoryStats.Categories[category])
+	}
+
+	// Print work patterns
+	fmt.Printf("\nWork Patterns:\n")
+	fmt.Printf("- Peak activity hour: %02d:00\n", workPatterns.PeakHour)
+	fmt.Printf("- Peak activity day: %s\n", workPatterns.PeakDay)
+
 	result.PrintSummary()
+}
+
+// analyzeCategoryStats analyzes page categories based on titles and content
+func (n *NotionAnalyzer) analyzeCategoryStats(createdPages, updatedPages []Page) *CategoryStats {
+	stats := &CategoryStats{
+		Categories: make(map[string]int),
+	}
+
+	allPages := append(createdPages, updatedPages...)
+
+	for _, page := range allPages {
+		title := strings.ToLower(page.Title)
+
+		// Categorize by title patterns using configuration
+		category := n.categoryConfig.CategorizeNotionPage(title)
+
+		switch category {
+		case "daily work log":
+			stats.DailyWorkLogs++
+			stats.Categories["Daily Work Log"]++
+		case "meeting notes":
+			stats.MeetingNotes++
+			stats.Categories["Meeting Notes"]++
+		case "technical documentation":
+			stats.TechnicalDocs++
+			stats.Categories["Technical Documentation"]++
+		case "project planning":
+			stats.ProjectPlanning++
+			stats.Categories["Project Planning"]++
+		default:
+			stats.Categories["Other"]++
+		}
+	}
+
+	return stats
+}
+
+// analyzeWorkPatterns analyzes when work activities occur
+func (n *NotionAnalyzer) analyzeWorkPatterns(createdPages, updatedPages []Page) *WorkPatterns {
+	patterns := &WorkPatterns{
+		HourlyActivity: make(map[int]int),
+		DailyActivity:  make(map[string]int),
+	}
+
+	allPages := append(createdPages, updatedPages...)
+
+	for _, page := range allPages {
+		// Use last edited time for activity analysis
+		hour := page.LastEditedTime.Hour()
+		dayOfWeek := page.LastEditedTime.Weekday().String()
+
+		patterns.HourlyActivity[hour]++
+		patterns.DailyActivity[dayOfWeek]++
+	}
+
+	// Find peak activity times
+	maxHourActivity := 0
+	maxDayActivity := 0
+
+	for hour, count := range patterns.HourlyActivity {
+		if count > maxHourActivity {
+			maxHourActivity = count
+			patterns.PeakHour = hour
+		}
+	}
+
+	for day, count := range patterns.DailyActivity {
+		if count > maxDayActivity {
+			maxDayActivity = count
+			patterns.PeakDay = day
+		}
+	}
+
+	return patterns
 }

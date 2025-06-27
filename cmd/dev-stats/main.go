@@ -49,11 +49,19 @@ func main() {
 	}
 
 	// Create analyzers
-	analyzers := map[string]common.Analyzer{
-		"github":   github.NewGitHubAnalyzer(),
-		"backlog":  backlog.NewBacklogAnalyzer(),
-		"calendar": calendar.NewCalendarAnalyzer(),
-		"notion":   notion.NewNotionAnalyzer(),
+	analyzers := make(map[string]common.Analyzer)
+
+	if githubAnalyzer := github.NewGitHubAnalyzer(); githubAnalyzer != nil {
+		analyzers["github"] = githubAnalyzer
+	}
+	if backlogAnalyzer := backlog.NewBacklogAnalyzer(); backlogAnalyzer != nil {
+		analyzers["backlog"] = backlogAnalyzer
+	}
+	if calendarAnalyzer := calendar.NewCalendarAnalyzer(); calendarAnalyzer != nil {
+		analyzers["calendar"] = calendarAnalyzer
+	}
+	if notionAnalyzer := notion.NewNotionAnalyzer(); notionAnalyzer != nil {
+		analyzers["notion"] = notionAnalyzer
 	}
 
 	// Determine which analyzers to run
@@ -89,11 +97,12 @@ func main() {
 	// Run analyzers
 	var results []*common.AnalysisResult
 	for _, analyzer := range analyzersToRun {
+		// Print header to console immediately for real-time progress
 		fmt.Printf("\n" + strings.Repeat("=", 60) + "\n")
 		fmt.Printf("Running %s analyzer...\n", analyzer.GetName())
 		fmt.Printf(strings.Repeat("=", 60) + "\n")
 
-		// Capture output
+		// Capture output for file saving
 		originalStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
@@ -119,11 +128,24 @@ func main() {
 			continue
 		}
 
-		// Print to console and save to file
+		// Print captured output to console and save to file
 		output := outputBuffer.String()
-		fmt.Print(output)
+		// Skip printing the header again since we already showed it
+		outputLines := strings.Split(output, "\n")
+		var filteredOutput []string
+		skipLines := 0
+		for i, line := range outputLines {
+			// Skip the header lines that match our format
+			if i < 3 && (strings.Contains(line, "=") || strings.Contains(line, "Running") || line == "") {
+				skipLines++
+				continue
+			}
+			filteredOutput = append(filteredOutput, line)
+		}
+		cleanOutput := strings.Join(filteredOutput, "\n")
+		fmt.Print(cleanOutput)
 
-		// Save to file
+		// Save full output (including header) to file
 		analyzerName := strings.ToLower(strings.ReplaceAll(analyzer.GetName(), " ", "-"))
 		filename := fmt.Sprintf("%s-stats.txt", analyzerName)
 		filepath := filepath.Join(outputDir, filename)

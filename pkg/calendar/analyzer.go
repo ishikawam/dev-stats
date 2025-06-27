@@ -10,11 +10,13 @@ import (
 	"time"
 
 	"dev-stats/pkg/common"
+	"dev-stats/pkg/config"
 )
 
 // CalendarAnalyzer implements the Analyzer interface for Calendar
 type CalendarAnalyzer struct {
-	calendarDir string
+	calendarDir    string
+	categoryConfig *config.CategorizationConfig
 }
 
 // Event represents a calendar event
@@ -34,10 +36,44 @@ type TitleStats struct {
 	Duration time.Duration
 }
 
+// EventCategoryStats represents statistics by event category
+type EventCategoryStats struct {
+	Categories   map[string]*CategoryInfo `json:"categories"`
+	MeetingTime  time.Duration            `json:"meeting_time"`
+	FocusTime    time.Duration            `json:"focus_time"`
+	LearningTime time.Duration            `json:"learning_time"`
+	AdminTime    time.Duration            `json:"admin_time"`
+}
+
+// CategoryInfo contains details about a specific category
+type CategoryInfo struct {
+	Count    int           `json:"count"`
+	Duration time.Duration `json:"duration"`
+	Events   []Event       `json:"events"`
+}
+
+// WorkingHoursStats represents analysis of working hours patterns
+type WorkingHoursStats struct {
+	HourlyDistribution map[int]time.Duration    `json:"hourly_distribution"`
+	DailyDistribution  map[string]time.Duration `json:"daily_distribution"`
+	PeakHours          []int                    `json:"peak_hours"`
+	TotalWorkingHours  time.Duration            `json:"total_working_hours"`
+}
+
 // NewCalendarAnalyzer creates a new Calendar analyzer
 func NewCalendarAnalyzer() *CalendarAnalyzer {
+	// Load category configuration
+	categoryConfig, err := config.LoadCategorizationConfig("")
+	if err != nil {
+		// Return nil to indicate initialization failure
+		// The caller should handle this error
+		fmt.Printf("Error: Failed to load category config: %v\n", err)
+		return nil
+	}
+
 	return &CalendarAnalyzer{
-		calendarDir: "storage/calendar",
+		calendarDir:    "storage/calendar",
+		categoryConfig: categoryConfig,
 	}
 }
 
@@ -82,25 +118,37 @@ func (c *CalendarAnalyzer) Analyze(config *common.Config) (*common.AnalysisResul
 	titleStats := c.calculateTitleStats(groupedByTitle)
 	allDayStats := c.calculateAllDayStats(groupedByTitle)
 
+	// Enhanced analysis
+	categoryStats := c.analyzeCategoryStats(filteredEvents)
+	workingHoursStats := c.analyzeWorkingHours(filteredEvents)
+
 	// Create result
 	result := &common.AnalysisResult{
 		AnalyzerName: c.GetName(),
 		StartDate:    config.StartDate,
 		EndDate:      config.EndDate,
 		Summary: map[string]interface{}{
-			"Total events":   len(filteredEvents),
-			"Total duration": totalDuration,
-			"Event titles":   len(groupedByTitle),
-			"All-day events": len(allDayStats),
+			"Total events":        len(filteredEvents),
+			"Total duration":      totalDuration,
+			"Event titles":        len(groupedByTitle),
+			"All-day events":      len(allDayStats),
+			"Meeting time":        categoryStats.MeetingTime,
+			"Focus time":          categoryStats.FocusTime,
+			"Learning time":       categoryStats.LearningTime,
+			"Admin time":          categoryStats.AdminTime,
+			"Total working hours": workingHoursStats.TotalWorkingHours,
+			"Event categories":    len(categoryStats.Categories),
 		},
 		Details: map[string]interface{}{
-			"events":        filteredEvents,
-			"title_stats":   titleStats,
-			"all_day_stats": allDayStats,
+			"events":         filteredEvents,
+			"title_stats":    titleStats,
+			"all_day_stats":  allDayStats,
+			"category_stats": categoryStats,
+			"working_hours":  workingHoursStats,
 		},
 	}
 
-	c.printResults(result, filteredEvents, titleStats, allDayStats)
+	c.printResults(result, filteredEvents, titleStats, allDayStats, categoryStats, workingHoursStats)
 	return result, nil
 }
 
@@ -269,7 +317,16 @@ func (c *CalendarAnalyzer) groupEventsByTitle(events []Event) map[string][]Event
 
 func (c *CalendarAnalyzer) calculateTitleStats(groupedEvents map[string][]Event) []TitleStats {
 	var stats []TitleStats
-	for title, events := range groupedEvents {
+
+	// Sort titles for deterministic output
+	var titles []string
+	for title := range groupedEvents {
+		titles = append(titles, title)
+	}
+	sort.Strings(titles)
+
+	for _, title := range titles {
+		events := groupedEvents[title]
 		var duration time.Duration
 		for _, event := range events {
 			if !c.isAllDayEvent(event) && !event.Start.IsZero() && !event.End.IsZero() {
@@ -290,7 +347,16 @@ func (c *CalendarAnalyzer) calculateTitleStats(groupedEvents map[string][]Event)
 
 func (c *CalendarAnalyzer) calculateAllDayStats(groupedEvents map[string][]Event) []TitleStats {
 	var stats []TitleStats
-	for title, events := range groupedEvents {
+
+	// Sort titles for deterministic output
+	var titles []string
+	for title := range groupedEvents {
+		titles = append(titles, title)
+	}
+	sort.Strings(titles)
+
+	for _, title := range titles {
+		events := groupedEvents[title]
 		allDayCount := 0
 		totalDays := 0
 
@@ -322,7 +388,7 @@ func (c *CalendarAnalyzer) calculateAllDayStats(groupedEvents map[string][]Event
 	return stats
 }
 
-func (c *CalendarAnalyzer) printResults(result *common.AnalysisResult, events []Event, titleStats, allDayStats []TitleStats) {
+func (c *CalendarAnalyzer) printResults(result *common.AnalysisResult, events []Event, titleStats, allDayStats []TitleStats, categoryStats *EventCategoryStats, workingHoursStats *WorkingHoursStats) {
 	fmt.Printf("\nCalendar events from %s to %s:\n",
 		result.StartDate.Format("2006-01-02"),
 		result.EndDate.Format("2006-01-02"))
@@ -395,4 +461,158 @@ func (c *CalendarAnalyzer) printResults(result *common.AnalysisResult, events []
 			fmt.Printf("%2d. %s: %d days (%d events)\n", i+1, stat.Title, totalDays, stat.Count)
 		}
 	}
+
+	// Print enhanced category analysis
+	fmt.Println("\nWork Category Analysis:")
+	fmt.Printf("- Meeting time: %s\n", c.formatDuration(categoryStats.MeetingTime))
+	fmt.Printf("- Focus time: %s\n", c.formatDuration(categoryStats.FocusTime))
+	fmt.Printf("- Learning time: %s\n", c.formatDuration(categoryStats.LearningTime))
+	fmt.Printf("- Admin time: %s\n", c.formatDuration(categoryStats.AdminTime))
+
+	fmt.Println("\nWorking Hours Analysis:")
+	fmt.Printf("- Total working hours: %s\n", c.formatDuration(workingHoursStats.TotalWorkingHours))
+	if len(workingHoursStats.PeakHours) > 0 {
+		fmt.Printf("- Peak activity hours: ")
+		for i, hour := range workingHoursStats.PeakHours {
+			if i > 0 {
+				fmt.Print(", ")
+			}
+			fmt.Printf("%02d:00", hour)
+		}
+		fmt.Println()
+	}
+}
+
+// analyzeCategoryStats categorizes events based on their titles and calculates time spent
+func (c *CalendarAnalyzer) analyzeCategoryStats(events []Event) *EventCategoryStats {
+	stats := &EventCategoryStats{
+		Categories: make(map[string]*CategoryInfo),
+	}
+
+	for _, event := range events {
+		if event.IsAllDay {
+			continue // Skip all-day events for time-based analysis
+		}
+
+		duration := event.End.Sub(event.Start)
+		title := strings.ToLower(event.Summary)
+
+		// Categorize events
+		category := c.categorizeEvent(title)
+
+		if stats.Categories[category] == nil {
+			stats.Categories[category] = &CategoryInfo{
+				Events: make([]Event, 0),
+			}
+		}
+
+		stats.Categories[category].Count++
+		stats.Categories[category].Duration += duration
+		stats.Categories[category].Events = append(stats.Categories[category].Events, event)
+
+		// Update main category totals using configuration
+		categoryType := c.categoryConfig.GetCategoryTime(title)
+		switch categoryType {
+		case "meeting":
+			stats.MeetingTime += duration
+		case "focus":
+			stats.FocusTime += duration
+		case "learning":
+			stats.LearningTime += duration
+		case "admin":
+			stats.AdminTime += duration
+		}
+	}
+
+	return stats
+}
+
+// categorizeEvent determines the category of an event based on its title
+func (c *CalendarAnalyzer) categorizeEvent(title string) string {
+	category := c.categoryConfig.CategorizeByKeywords(title)
+
+	// Convert category names to display format for compatibility
+	switch category {
+	case "1on1 meetings":
+		return "1on1 Meetings"
+	case "daily standups":
+		return "Daily Standups"
+	case "regular meetings":
+		return "Regular Meetings"
+	case "general meetings":
+		return "General Meetings"
+	case "focus work":
+		return "Focus Work"
+	case "technical consultation":
+		return "Technical Consultation"
+	case "learning & training":
+		return "Learning & Training"
+	case "time off":
+		return "Time Off"
+	case "meeting":
+		return "General Meetings"
+	case "focus":
+		return "Focus Work"
+	case "learning":
+		return "Learning & Training"
+	case "admin":
+		return "Admin Work"
+	default:
+		return "Other"
+	}
+}
+
+// analyzeWorkingHours analyzes patterns in working hours
+func (c *CalendarAnalyzer) analyzeWorkingHours(events []Event) *WorkingHoursStats {
+	stats := &WorkingHoursStats{
+		HourlyDistribution: make(map[int]time.Duration),
+		DailyDistribution:  make(map[string]time.Duration),
+	}
+
+	for _, event := range events {
+		if event.IsAllDay {
+			continue
+		}
+
+		duration := event.End.Sub(event.Start)
+		hour := event.Start.Hour()
+		day := event.Start.Weekday().String()
+
+		stats.HourlyDistribution[hour] += duration
+		stats.DailyDistribution[day] += duration
+		stats.TotalWorkingHours += duration
+	}
+
+	// Find peak hours (top 3 hours with most activity)
+	type hourData struct {
+		hour     int
+		duration time.Duration
+	}
+
+	var hourList []hourData
+	for hour, duration := range stats.HourlyDistribution {
+		hourList = append(hourList, hourData{hour, duration})
+	}
+
+	sort.Slice(hourList, func(i, j int) bool {
+		return hourList[i].duration > hourList[j].duration
+	})
+
+	// Take top 3 peak hours
+	for i := 0; i < len(hourList) && i < 3; i++ {
+		stats.PeakHours = append(stats.PeakHours, hourList[i].hour)
+	}
+
+	return stats
+}
+
+// formatDuration formats duration in a human-readable way
+func (c *CalendarAnalyzer) formatDuration(d time.Duration) string {
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+
+	if hours > 0 {
+		return fmt.Sprintf("%dh%dm", hours, minutes)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }

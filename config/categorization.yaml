@@ -1,0 +1,87 @@
+# Shared Categorization Configuration
+# Used by multiple analyzers for consistent keyword-based categorization
+
+categories:
+  meeting:
+    name: "Meeting time"
+    keywords:
+      - "mtg"
+      - "meeting"
+      - "朝会"
+      - "定例"
+      - "1on1"
+      - "相談"
+      - "技術"
+    
+  focus:
+    name: "Focus time"
+    keywords:
+      - "作業"
+      - "block"
+      - "focus"
+      - "開発"
+    
+  learning:
+    name: "Learning time"
+    keywords:
+      - "研修"
+      - "学習"
+      - "勉強"
+      - "training"
+    
+  admin:
+    name: "Admin time"
+    keywords:
+      - "申請"
+      - "手続き"
+      - "admin"
+      - "管理"
+
+# Event-specific categorization rules
+# These map specific event patterns to categories
+event_categories:
+  "1on1 meetings":
+    keywords: ["1on1"]
+    category: "meeting"
+  
+  "daily standups":
+    keywords: ["朝会"]
+    category: "meeting"
+  
+  "regular meetings":
+    keywords: ["定例"]
+    category: "meeting"
+  
+  "general meetings":
+    keywords: ["mtg", "meeting"]
+    category: "meeting"
+  
+  "focus work":
+    keywords: ["作業", "block"]
+    category: "focus"
+  
+  "technical consultation":
+    keywords: ["相談", "技術"]
+    category: "meeting"
+  
+  "learning & training":
+    keywords: ["研修", "学習"]
+    category: "learning"
+  
+  "time off":
+    keywords: ["不在", "休み"]
+    category: "other"
+
+# Notion-specific categorization rules
+notion_categories:
+  "daily work log":
+    keywords: ["作業", "masayuki ishikawa"]
+    
+  "meeting notes":
+    keywords: ["朝会", "mtg", "meeting", "定例"]
+    
+  "technical documentation":
+    keywords: ["技術", "api", "backend", "設計"]
+    
+  "project planning":
+    keywords: ["プロジェクト", "計画", "スケジュール", "mbo"]

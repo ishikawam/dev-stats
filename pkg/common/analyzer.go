@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"sort"
 	"time"
 )
 
@@ -41,7 +42,14 @@ func (r *AnalysisResult) PrintSummary() {
 		r.StartDate.Format("2006-01-02"),
 		r.EndDate.Format("2006-01-02"))
 
-	for key, value := range r.Summary {
-		fmt.Printf("%s: %v\n", key, value)
+	// Sort summary keys for deterministic output
+	var keys []string
+	for key := range r.Summary {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		fmt.Printf("%s: %v\n", key, r.Summary[key])
 	}
 }

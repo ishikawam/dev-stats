@@ -28,6 +28,36 @@ type PullRequest struct {
 		Login string `json:"login"`
 	} `json:"user"`
 	RepositoryURL string `json:"repository_url"`
+	Number        int    `json:"number"`
+}
+
+// ReviewComment represents a PR review comment
+type ReviewComment struct {
+	ID        int       `json:"id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+	User      struct {
+		Login string `json:"login"`
+	} `json:"user"`
+}
+
+// Review represents a PR review
+type Review struct {
+	ID          int       `json:"id"`
+	State       string    `json:"state"` // APPROVED, CHANGES_REQUESTED, COMMENTED
+	Body        string    `json:"body"`
+	SubmittedAt time.Time `json:"submitted_at"`
+	User        struct {
+		Login string `json:"login"`
+	} `json:"user"`
+}
+
+// ReviewStats tracks review activity
+type ReviewStats struct {
+	ReviewsGiven     int `json:"reviews_given"`
+	ApprovalsGiven   int `json:"approvals_given"`
+	CommentsGiven    int `json:"comments_given"`
+	ChangesRequested int `json:"changes_requested"`
 }
 
 // SearchResponse represents GitHub search API response
@@ -85,6 +115,14 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult,
 		return nil, common.WrapError(err, "failed to search authored PRs")
 	}
 
+	// Analyze review activity
+	fmt.Println("Analyzing review activity...")
+	reviewStats, err := g.analyzeReviewActivity(involvedPRs, config.StartDate, config.EndDate)
+	if err != nil {
+		fmt.Printf("Warning: Failed to analyze review activity: %v\n", err)
+		reviewStats = &ReviewStats{} // Use empty stats if analysis fails
+	}
+
 	// Analyze results
 	orgStats := make(map[string]struct{ authored, involved int })
 	repoStats := make(map[string]struct{ authored, involved int })
@@ -140,16 +178,21 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config) (*common.AnalysisResult,
 			"Total PRs (involves)": len(involvedPRs),
 			"Active organizations": len(orgStats),
 			"Active repositories":  len(repoStats),
+			"Reviews given":        reviewStats.ReviewsGiven,
+			"Approvals given":      reviewStats.ApprovalsGiven,
+			"Review comments":      reviewStats.CommentsGiven,
+			"Changes requested":    reviewStats.ChangesRequested,
 		},
 		Details: map[string]interface{}{
 			"authored_prs": authoredPRs,
 			"involved_prs": involvedPRs,
 			"org_stats":    orgStats,
 			"repo_stats":   repoStats,
+			"review_stats": reviewStats,
 		},
 	}
 
-	g.printResults(result, authoredPRs, involvedPRs, orgStats, repoStats)
+	g.printResults(result, authoredPRs, involvedPRs, orgStats, repoStats, reviewStats)
 	return result, nil
 }
 
@@ -212,7 +255,7 @@ func (g *GitHubAnalyzer) extractRepoName(fullName string) string {
 	return fullName
 }
 
-func (g *GitHubAnalyzer) printResults(result *common.AnalysisResult, authoredPRs, involvedPRs []PullRequest, orgStats, repoStats map[string]struct{ authored, involved int }) {
+func (g *GitHubAnalyzer) printResults(result *common.AnalysisResult, authoredPRs, involvedPRs []PullRequest, orgStats, repoStats map[string]struct{ authored, involved int }, reviewStats *ReviewStats) {
 	fmt.Printf("\nPull Requests from %s to %s:\n",
 		result.StartDate.Format("2006-01-02"),
 		result.EndDate.Format("2006-01-02"))
@@ -227,6 +270,13 @@ func (g *GitHubAnalyzer) printResults(result *common.AnalysisResult, authoredPRs
 	}
 
 	result.PrintSummary()
+
+	// Print review activity stats
+	fmt.Println("\nReview Activity:")
+	fmt.Printf("- Total reviews given: %d\n", reviewStats.ReviewsGiven)
+	fmt.Printf("- Approvals given: %d\n", reviewStats.ApprovalsGiven)
+	fmt.Printf("- Review comments: %d\n", reviewStats.CommentsGiven)
+	fmt.Printf("- Changes requested: %d\n", reviewStats.ChangesRequested)
 
 	// Print organization stats
 	fmt.Println("\nPR count per organization (author/involves):")
@@ -263,4 +313,94 @@ func (g *GitHubAnalyzer) printResults(result *common.AnalysisResult, authoredPRs
 	for _, stat := range sortedRepos {
 		fmt.Printf("- %s: %d (%d)\n", stat.name, stat.authored, stat.involved)
 	}
+}
+
+// analyzeReviewActivity analyzes the user's review activity on PRs
+func (g *GitHubAnalyzer) analyzeReviewActivity(involvedPRs []PullRequest, startDate, endDate time.Time) (*ReviewStats, error) {
+	stats := &ReviewStats{}
+
+	// Track unique repositories to avoid rate limiting
+	repoMap := make(map[string]bool)
+	for _, pr := range involvedPRs {
+		repoFullName := g.extractRepoFromURL(pr.RepositoryURL)
+		repoMap[repoFullName] = true
+	}
+
+	fmt.Printf("Analyzing reviews across %d repositories...\n", len(repoMap))
+
+	// Analyze each repository
+	for repoFullName := range repoMap {
+		repoStats, err := g.getReviewStatsForRepo(repoFullName, startDate, endDate)
+		if err != nil {
+			fmt.Printf("Warning: Failed to get review stats for %s: %v\n", repoFullName, err)
+			continue
+		}
+
+		stats.ReviewsGiven += repoStats.ReviewsGiven
+		stats.ApprovalsGiven += repoStats.ApprovalsGiven
+		stats.CommentsGiven += repoStats.CommentsGiven
+		stats.ChangesRequested += repoStats.ChangesRequested
+	}
+
+	return stats, nil
+}
+
+// getReviewStatsForRepo gets review statistics for a specific repository
+func (g *GitHubAnalyzer) getReviewStatsForRepo(repoFullName string, startDate, endDate time.Time) (*ReviewStats, error) {
+	stats := &ReviewStats{}
+
+	// Search for PRs in this repo within date range that the user reviewed
+	query := fmt.Sprintf("repo:%s type:pr reviewed-by:%s created:%s..%s",
+		repoFullName, g.username, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+
+	apiURL := fmt.Sprintf("https://api.github.com/search/issues?q=%s&per_page=100",
+		url.QueryEscape(query))
+
+	body, err := g.client.Get(apiURL, nil)
+	if err != nil {
+		return stats, err
+	}
+
+	var response SearchResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return stats, common.WrapError(err, "failed to parse review search response")
+	}
+
+	// For each PR, get detailed review information
+	for _, pr := range response.Items {
+		reviewsURL := fmt.Sprintf("https://api.github.com/repos/%s/pulls/%d/reviews",
+			repoFullName, pr.Number)
+
+		reviewBody, err := g.client.Get(reviewsURL, nil)
+		if err != nil {
+			fmt.Printf("Warning: Failed to get reviews for PR #%d: %v\n", pr.Number, err)
+			continue
+		}
+
+		var reviews []Review
+		if err := json.Unmarshal(reviewBody, &reviews); err != nil {
+			fmt.Printf("Warning: Failed to parse reviews for PR #%d: %v\n", pr.Number, err)
+			continue
+		}
+
+		// Count reviews by this user within date range
+		for _, review := range reviews {
+			if review.User.Login == g.username &&
+				review.SubmittedAt.After(startDate.Add(-24*time.Hour)) &&
+				review.SubmittedAt.Before(endDate.Add(24*time.Hour)) {
+				stats.ReviewsGiven++
+
+				switch review.State {
+				case "APPROVED":
+					stats.ApprovalsGiven++
+				case "CHANGES_REQUESTED":
+					stats.ChangesRequested++
+				case "COMMENTED":
+					stats.CommentsGiven++
+				}
+			}
+		}
+	}
+
+	return stats, nil
 }

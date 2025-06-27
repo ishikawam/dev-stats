@@ -22,27 +22,27 @@ install:
 
 # Build the unified dev-stats command
 build:
-	go build -o dev-stats cmd/dev-stats/main.go
+	go build -o bin/dev-stats cmd/dev-stats/main.go
 
 # Run GitHub analysis
 run-github: build
-	./dev-stats -analyzer github
+	./bin/dev-stats -analyzer github
 
 # Run Backlog analysis
 run-backlog: build
-	./dev-stats -analyzer backlog
+	./bin/dev-stats -analyzer backlog
 
 # Run Calendar analysis
 run-calendar: build
-	./dev-stats -analyzer calendar
+	./bin/dev-stats -analyzer calendar
 
 # Run Notion analysis
 run-notion: build
-	./dev-stats -analyzer notion
+	./bin/dev-stats -analyzer notion
 
 # Run all analyzers
 run-all: build
-	./dev-stats -analyzer all
+	./bin/dev-stats -analyzer all
 
 
 # Format code

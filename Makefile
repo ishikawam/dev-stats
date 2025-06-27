@@ -5,10 +5,12 @@ help:
 	@echo "Available targets:"
 	@echo "  help         - Show this help message"
 	@echo "  install      - Install dependencies"
+	@echo "  build        - Build the unified dev-stats command"
 	@echo "  run-github   - Run GitHub analysis"
 	@echo "  run-backlog  - Run Backlog analysis"
 	@echo "  run-calendar - Run Calendar analysis"
 	@echo "  run-notion   - Run Notion analysis"
+	@echo "  run-all      - Run all analyzers"
 	@echo "  fmt          - Format code"
 	@echo "  vet          - Run go vet"
 	@echo "  check        - Run fmt, vet, and test"
@@ -18,21 +20,30 @@ install:
 	go mod tidy
 	go mod download
 
+# Build the unified dev-stats command
+build:
+	go build -o dev-stats cmd/dev-stats/main.go
+
 # Run GitHub analysis
-run-github:
-	go run cmd/github/main.go
+run-github: build
+	./dev-stats -analyzer github
 
 # Run Backlog analysis
-run-backlog:
-	go run cmd/backlog/main.go
+run-backlog: build
+	./dev-stats -analyzer backlog
 
 # Run Calendar analysis
-run-calendar:
-	go run cmd/calendar/main.go
+run-calendar: build
+	./dev-stats -analyzer calendar
 
 # Run Notion analysis
-run-notion:
-	go run cmd/notion/main.go
+run-notion: build
+	./dev-stats -analyzer notion
+
+# Run all analyzers
+run-all: build
+	./dev-stats -analyzer all
+
 
 # Format code
 fmt:

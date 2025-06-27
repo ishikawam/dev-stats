@@ -138,6 +138,31 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
     - The tool automatically detects your user ID from workspace pages
     - The results include pages you created and updated, with URLs and timestamps
 
+## Unified Command Usage
+
+The project has been refactored to provide a unified command interface. You can now run any analyzer using the `dev-stats` command:
+
+```bash
+# Build the unified command
+make build
+
+# Run individual analyzers
+./dev-stats -analyzer github
+./dev-stats -analyzer backlog
+./dev-stats -analyzer calendar
+./dev-stats -analyzer notion
+
+# Run multiple analyzers
+./dev-stats -analyzer github,backlog
+
+# Run all analyzers
+./dev-stats -analyzer all
+
+# Show help and available options
+./dev-stats -help
+./dev-stats -list
+```
+
 ## Example `.env` File
 
 ```plaintext
@@ -263,11 +288,16 @@ make help
 # Install dependencies
 make install
 
-# Run specific analysis
+# Build the unified command
+make build
+
+# Run specific analysis (unified command)
 make run-github
 make run-backlog
 make run-calendar
 make run-notion
+make run-all        # Run all analyzers
+
 
 # Code quality checks
 make fmt        # Format code
@@ -299,3 +329,4 @@ make check      # Run all checks (fmt, vet)
     - Backlog: Activity count by type, unique issues involved, and summaries.
     - Calendar: Event listings with duration indicators, rankings by count/duration/days, all-day event detection.
     - Notion: Pages you created or updated, with URLs and activity timestamps.
+- **Architecture**: The project uses a unified architecture with common libraries and interfaces, making it easy to extend with new analyzers.

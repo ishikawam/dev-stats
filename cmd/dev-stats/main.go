@@ -187,6 +187,7 @@ func printHelp() {
 	fmt.Println()
 	fmt.Println("  For Notion:")
 	fmt.Println("    NOTION_TOKEN        Notion integration token")
+	fmt.Println("    NOTION_USER_ID      (Optional) Specific user ID to filter pages by")
 }
 
 func printAvailableAnalyzers() {

@@ -331,8 +331,14 @@ func (n *NotionAnalyzer) searchPages(writer io.Writer, userID string, startDate,
 				continue
 			}
 
-			// Check if user created or edited this page
-			isUserInvolved := (page.CreatedBy.ID == userID) || (page.LastEditedBy.ID == userID)
+			// Get specified user ID from environment, fallback to detected user ID
+			specifiedUserID := os.Getenv("NOTION_USER_ID")
+			if specifiedUserID == "" {
+				specifiedUserID = userID
+			}
+			
+			// Check if specified user created or edited this page
+			isUserInvolved := (page.CreatedBy.ID == specifiedUserID) || (page.LastEditedBy.ID == specifiedUserID)
 
 			// Check if activity happened in date range
 			inDateRange := (page.CreatedTime.After(startDate) && page.CreatedTime.Before(endDate.AddDate(0, 0, 1))) ||
@@ -482,11 +488,17 @@ func (n *NotionAnalyzer) extractTextFromRichTextArray(richTextArray []interface{
 }
 
 func (n *NotionAnalyzer) categorizePages(pages []Page, userID string) (created []Page, updated []Page) {
+	// Get specified user ID from environment, fallback to detected user ID
+	specifiedUserID := os.Getenv("NOTION_USER_ID")
+	if specifiedUserID == "" {
+		specifiedUserID = userID
+	}
+	
 	for _, page := range pages {
-		if page.CreatedBy.ID == userID {
+		if page.CreatedBy.ID == specifiedUserID {
 			created = append(created, page)
 		}
-		if page.LastEditedBy.ID == userID && page.CreatedBy.ID != userID {
+		if page.LastEditedBy.ID == specifiedUserID && page.CreatedBy.ID != specifiedUserID {
 			updated = append(updated, page)
 		}
 	}

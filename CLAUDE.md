@@ -55,6 +55,7 @@ The application requires environment variables to be set in a `.env` file:
 
 **Notion analysis:**
 - `NOTION_TOKEN` - Notion integration token with content read access
+- `NOTION_USER_ID` - (Optional) Specific user ID to filter pages by. If not provided, auto-detected user ID will be used
 - `START_DATE` / `END_DATE` - Date range in YYYY-MM-DD format
 
 Use `.env.example` as a template.
@@ -120,6 +121,7 @@ make check  # Run all checks
 **Notion API Integration:**
 - Uses Notion API v1 with Integration Token authentication
 - Auto-detects user ID from workspace pages to handle token vs workspace user ID mismatch
+- Supports custom user ID specification via `NOTION_USER_ID` environment variable
 - Client-side filtering by date range and user involvement (created or edited pages)
 - Smart pagination with early termination for performance optimization
 - Caches database titles and user names to minimize API calls

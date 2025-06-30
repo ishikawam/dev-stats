@@ -117,6 +117,8 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
       # .env
 
       NOTION_TOKEN=your-notion-integration-token
+      # Optional: Specific user ID to filter pages by
+      NOTION_USER_ID=your-notion-user-id
 
       # YYYY-MM-DD format
       START_DATE=2024-01-01
@@ -125,6 +127,7 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
     - Alternatively, export the variables in your terminal:
       ```bash
       export NOTION_TOKEN=your-notion-integration-token
+      export NOTION_USER_ID=your-notion-user-id  # Optional
       export START_DATE=2024-01-01
       export END_DATE=2024-06-30
       ```
@@ -135,8 +138,9 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
    ```
 
 3. **View the output**:
-    - The tool automatically detects your user ID from workspace pages
+    - The tool automatically detects your user ID from workspace pages (or uses the specified `NOTION_USER_ID`)
     - The results include pages you created and updated, with URLs and timestamps
+    - Includes timekeeper entries and categorized work analysis
 
 ## Unified Command Usage
 
@@ -180,6 +184,8 @@ BACKLOG_PROJECT_ID=your-project-id
 
 # Notion
 NOTION_TOKEN=your-notion-integration-token
+# Optional: Specific user ID to filter pages by
+NOTION_USER_ID=your-notion-user-id
 
 # Calendar analysis requires START_DATE and END_DATE for filtering events
 
@@ -320,6 +326,7 @@ make check      # Run all checks (fmt, vet)
     - Create an integration at https://www.notion.so/my-integrations
     - Copy the Integration Token
     - Share your workspace pages with the integration
+    - Optionally specify `NOTION_USER_ID` to filter pages for a specific user
 
 ## Notes
 
@@ -328,5 +335,5 @@ make check      # Run all checks (fmt, vet)
     - GitHub: PRs you were involved in as an author or reviewer, summary of PR counts per organization and repository.
     - Backlog: Activity count by type, unique issues involved, and summaries.
     - Calendar: Event listings with duration indicators, rankings by count/duration/days, all-day event detection.
-    - Notion: Pages you created or updated, with URLs and activity timestamps.
+    - Notion: Pages you created or updated, with URLs and activity timestamps, including timekeeper entries and work category analysis.
 - **Architecture**: The project uses a unified architecture with common libraries and interfaces, making it easy to extend with new analyzers.

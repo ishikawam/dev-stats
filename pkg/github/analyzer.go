@@ -131,12 +131,11 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 		reviewStats = &ReviewStats{} // Use empty stats if analysis fails
 	}
 
-
 	// Analyze results
 	orgStats := make(map[string]struct{ authored, involved int })
 	repoStats := make(map[string]struct{ authored, involved int })
 	labelStats := make(map[string]int)
-	
+
 	// Categorize PRs by value
 	var valuablePRs, lowValuePRs []PullRequest
 	for _, pr := range authoredPRs {
@@ -293,29 +292,29 @@ func (g *GitHubAnalyzer) extractRepoName(fullName string) string {
 // isLowValuePR determines if a PR is low value based on title patterns
 func (g *GitHubAnalyzer) isLowValuePR(pr PullRequest) bool {
 	title := strings.ToLower(strings.TrimSpace(pr.Title))
-	
+
 	// Check for back merge patterns
 	if strings.Contains(title, "back merge") || strings.Contains(title, "backmerge") {
 		return true
 	}
-	
+
 	// Define branch names
 	branches := []string{"develop", "main", "stg", "staging", "production", "master"}
-	
+
 	// Check for branch to branch patterns like "develop -> main", "main to staging"
 	for _, fromBranch := range branches {
 		for _, toBranch := range branches {
 			if fromBranch != toBranch {
 				// Check patterns: "branch -> branch", "branch to branch"
 				if strings.Contains(title, fromBranch+" -> "+toBranch) ||
-				   strings.Contains(title, fromBranch+" to "+toBranch) ||
-				   strings.Contains(title, fromBranch+"->"+toBranch) {
+					strings.Contains(title, fromBranch+" to "+toBranch) ||
+					strings.Contains(title, fromBranch+"->"+toBranch) {
 					return true
 				}
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -330,7 +329,7 @@ func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 		fmt.Fprintf(writer, "- %s: %s\n", pr.CreatedAt.Format("2006-01-02 15:04"), pr.Title)
 		fmt.Fprintf(writer, "  URL: %s\n", pr.URL)
 		fmt.Fprintf(writer, "  Repository: %s\n", g.extractRepoFromURL(pr.RepositoryURL))
-		
+
 		// Display labels if any
 		if len(pr.Labels) > 0 {
 			labelNames := make([]string, len(pr.Labels))
@@ -339,7 +338,7 @@ func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 			}
 			fmt.Fprintf(writer, "  Labels: %s\n", strings.Join(labelNames, ", "))
 		}
-		
+
 		fmt.Fprintln(writer)
 	}
 
@@ -349,7 +348,7 @@ func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 		fmt.Fprintf(writer, "- %s: %s\n", pr.CreatedAt.Format("2006-01-02 15:04"), pr.Title)
 		fmt.Fprintf(writer, "  URL: %s\n", pr.URL)
 		fmt.Fprintf(writer, "  Repository: %s\n", g.extractRepoFromURL(pr.RepositoryURL))
-		
+
 		// Display labels if any
 		if len(pr.Labels) > 0 {
 			labelNames := make([]string, len(pr.Labels))
@@ -358,7 +357,7 @@ func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 			}
 			fmt.Fprintf(writer, "  Labels: %s\n", strings.Join(labelNames, ", "))
 		}
-		
+
 		fmt.Fprintln(writer)
 	}
 
@@ -423,7 +422,7 @@ func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 		}
 		return sortedLabels[i].count > sortedLabels[j].count
 	})
-	
+
 	if len(sortedLabels) == 0 {
 		fmt.Fprintln(writer, "- No labels found in authored PRs")
 	} else {
@@ -453,7 +452,6 @@ func (g *GitHubAnalyzer) analyzeReviewActivity(writer io.Writer, involvedPRs []P
 			fmt.Fprintf(writer, "Warning: Failed to get review stats for %s: %v\n", repoFullName, err)
 			continue
 		}
-
 
 		stats.ReviewsGiven += repoStats.ReviewsGiven
 		stats.ApprovalsGiven += repoStats.ApprovalsGiven
@@ -501,7 +499,6 @@ func (g *GitHubAnalyzer) getReviewStatsForRepo(writer io.Writer, repoFullName st
 			fmt.Fprintf(writer, "Warning: Failed to parse reviews for PR #%d: %v\n", pr.Number, err)
 			continue
 		}
-
 
 		// Count reviews by this user within date range
 		for _, review := range reviews {

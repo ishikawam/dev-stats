@@ -128,7 +128,6 @@ func (b *BacklogAnalyzer) Analyze(config *common.Config, writer io.Writer) (*com
 	fmt.Fprintf(writer, "Space: %s, Project ID: %s\n", b.spaceName, b.projectID)
 	fmt.Fprintf(writer, "Date range: %s to %s\n", config.StartDate.Format("2006-01-02"), config.EndDate.Format("2006-01-02"))
 
-
 	// Get issues created by user
 	createdIssues, err := b.getIssuesCreatedByUser(config.StartDate, config.EndDate)
 	if err != nil {

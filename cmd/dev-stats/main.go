@@ -149,8 +149,6 @@ func createOutputDirectory(startDate, endDate time.Time) string {
 	return outputDir
 }
 
-
-
 func printHelp() {
 	fmt.Println("dev-stats - Development Statistics Analyzer")
 	fmt.Println()

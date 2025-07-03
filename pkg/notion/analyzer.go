@@ -150,7 +150,6 @@ func (n *NotionAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 		return nil, common.WrapError(err, "failed to search pages")
 	}
 
-
 	// Categorize pages
 	createdPages, updatedPages := n.categorizePages(pages, targetUserID)
 
@@ -281,27 +280,27 @@ func (n *NotionAnalyzer) searchPages(writer io.Writer, userID string, startDate,
 
 	fmt.Fprintf(writer, "Searching pages (stopping when %d consecutive pages are outside date range)...\n", maxConsecutiveOldPages)
 
-    for {
-        var requestBodyBuilder strings.Builder
-        requestBodyBuilder.WriteString(`{
+	for {
+		var requestBodyBuilder strings.Builder
+		requestBodyBuilder.WriteString(`{
             "sort": {
                 "direction": "descending",
                 "timestamp": "last_edited_time"
             }`)
 
-        if cursor != "" {
-            requestBodyBuilder.WriteString(fmt.Sprintf(`,
+		if cursor != "" {
+			requestBodyBuilder.WriteString(fmt.Sprintf(`,
             "start_cursor": "%s"`, cursor))
-        }
+		}
 
-        requestBodyBuilder.WriteString(`,
+		requestBodyBuilder.WriteString(`,
             "page_size": 100
 }`)
-        requestBody := requestBodyBuilder.String()
+		requestBody := requestBodyBuilder.String()
 
-        url := fmt.Sprintf("%s/search", notionAPIURL)
-        requestCount++
-        fmt.Fprintf(writer, "API Request #%d (fetching up to 100 pages)...", requestCount)
+		url := fmt.Sprintf("%s/search", notionAPIURL)
+		requestCount++
+		fmt.Fprintf(writer, "API Request #%d (fetching up to 100 pages)...", requestCount)
 
 		body, err := n.client.Post(url, requestBody, nil)
 		if err != nil {
@@ -338,7 +337,7 @@ func (n *NotionAnalyzer) searchPages(writer io.Writer, userID string, startDate,
 			if specifiedUserID == "" {
 				specifiedUserID = userID
 			}
-			
+
 			// Check if specified user created or edited this page
 			isUserInvolved := (page.CreatedBy.ID == specifiedUserID) || (page.LastEditedBy.ID == specifiedUserID)
 
@@ -583,18 +582,11 @@ func (n *NotionAnalyzer) getPageProperties(page Page) (project string, workTime 
 
 	// Debug: log all property names to understand the structure
 	for propName, propValue := range page.Properties {
-		if strings.Contains(propName, "プロジェクト") || strings.Contains(propName, "🚀") {
+		if strings.Contains(propName, "プロジェクト") {
 			project = n.extractPropertyValue(propValue)
 		}
 		if strings.Contains(propName, "作業時間") {
 			workTime = n.extractPropertyValue(propValue)
-		}
-	}
-
-	// Fallback: try exact matches
-	if project == "" {
-		if projectProp, exists := page.Properties["🚀 プロジェクト"]; exists {
-			project = n.extractPropertyValue(projectProp)
 		}
 	}
 
@@ -613,7 +605,7 @@ func (n *NotionAnalyzer) categorizePages(pages []Page, userID string) (created [
 	if specifiedUserID == "" {
 		specifiedUserID = userID
 	}
-	
+
 	for _, page := range pages {
 		if page.CreatedBy.ID == specifiedUserID {
 			created = append(created, page)
@@ -648,16 +640,16 @@ func (n *NotionAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 	for _, page := range createdPages {
 		fmt.Fprintf(writer, "- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
 		fmt.Fprintf(writer, "  URL: %s\n", page.URL)
-		
+
 		// Display properties if they exist
 		project, workTime := n.getPageProperties(page)
 		if project != "" {
-			fmt.Fprintf(writer, "  🚀 プロジェクト: %s\n", project)
+			fmt.Fprintf(writer, "  プロジェクト: %s\n", project)
 		}
 		if workTime != "" {
 			fmt.Fprintf(writer, "  作業時間: %s\n", workTime)
 		}
-		
+
 		fmt.Fprintln(writer)
 	}
 
@@ -669,7 +661,7 @@ func (n *NotionAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 		// Display properties if they exist
 		project, workTime := n.getPageProperties(page)
 		if project != "" {
-			fmt.Fprintf(writer, "  🚀 プロジェクト: %s\n", project)
+			fmt.Fprintf(writer, "  プロジェクト: %s\n", project)
 		}
 		if workTime != "" {
 			fmt.Fprintf(writer, "  作業時間: %s\n", workTime)

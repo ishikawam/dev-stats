@@ -105,7 +105,6 @@ func (c *CalendarAnalyzer) Analyze(config *common.Config, writer io.Writer) (*co
 		return nil, common.WrapError(err, "failed to read ICS files")
 	}
 
-
 	// Filter events by date range
 	filteredEvents := c.filterEventsByDateRange(allEvents, config.StartDate, config.EndDate)
 

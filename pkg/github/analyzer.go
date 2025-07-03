@@ -136,6 +136,16 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 	orgStats := make(map[string]struct{ authored, involved int })
 	repoStats := make(map[string]struct{ authored, involved int })
 	labelStats := make(map[string]int)
+	
+	// Categorize PRs by value
+	var valuablePRs, lowValuePRs []PullRequest
+	for _, pr := range authoredPRs {
+		if g.isLowValuePR(pr) {
+			lowValuePRs = append(lowValuePRs, pr)
+		} else {
+			valuablePRs = append(valuablePRs, pr)
+		}
+	}
 
 	for _, pr := range authoredPRs {
 		fullName := g.extractRepoFromURL(pr.RepositoryURL)
@@ -195,6 +205,8 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 			"Total PRs":            len(involvedPRs),
 			"Total PRs (author)":   len(authoredPRs),
 			"Total PRs (involves)": len(involvedPRs),
+			"PRs (valuable)":       len(valuablePRs),
+			"PRs (low-value)":      len(lowValuePRs),
 			"Active organizations": len(orgStats),
 			"Active repositories":  len(repoStats),
 			"Unique labels":        len(labelStats),
@@ -204,16 +216,18 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 			"Changes requested":    reviewStats.ChangesRequested,
 		},
 		Details: map[string]interface{}{
-			"authored_prs": authoredPRs,
-			"involved_prs": involvedPRs,
-			"org_stats":    orgStats,
-			"repo_stats":   repoStats,
-			"label_stats":  labelStats,
-			"review_stats": reviewStats,
+			"authored_prs":  authoredPRs,
+			"involved_prs":  involvedPRs,
+			"valuable_prs":  valuablePRs,
+			"low_value_prs": lowValuePRs,
+			"org_stats":     orgStats,
+			"repo_stats":    repoStats,
+			"label_stats":   labelStats,
+			"review_stats":  reviewStats,
 		},
 	}
 
-	g.printResults(writer, result, authoredPRs, involvedPRs, orgStats, repoStats, labelStats, reviewStats)
+	g.printResults(writer, result, authoredPRs, involvedPRs, valuablePRs, lowValuePRs, orgStats, repoStats, labelStats, reviewStats)
 	return result, nil
 }
 
@@ -276,14 +290,62 @@ func (g *GitHubAnalyzer) extractRepoName(fullName string) string {
 	return fullName
 }
 
-func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, authoredPRs, involvedPRs []PullRequest, orgStats, repoStats map[string]struct{ authored, involved int }, labelStats map[string]int, reviewStats *ReviewStats) {
+// isLowValuePR determines if a PR is low value based on title patterns
+func (g *GitHubAnalyzer) isLowValuePR(pr PullRequest) bool {
+	title := strings.ToLower(strings.TrimSpace(pr.Title))
+	
+	// Check for back merge patterns
+	if strings.Contains(title, "back merge") || strings.Contains(title, "backmerge") {
+		return true
+	}
+	
+	// Define branch names
+	branches := []string{"develop", "main", "stg", "staging", "production", "master"}
+	
+	// Check for branch to branch patterns like "develop -> main", "main to staging"
+	for _, fromBranch := range branches {
+		for _, toBranch := range branches {
+			if fromBranch != toBranch {
+				// Check patterns: "branch -> branch", "branch to branch"
+				if strings.Contains(title, fromBranch+" -> "+toBranch) ||
+				   strings.Contains(title, fromBranch+" to "+toBranch) ||
+				   strings.Contains(title, fromBranch+"->"+toBranch) {
+					return true
+				}
+			}
+		}
+	}
+	
+	return false
+}
+
+func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, authoredPRs, involvedPRs, valuablePRs, lowValuePRs []PullRequest, orgStats, repoStats map[string]struct{ authored, involved int }, labelStats map[string]int, reviewStats *ReviewStats) {
 	fmt.Fprintf(writer, "\nPull Requests from %s to %s:\n",
 		result.StartDate.Format("2006-01-02"),
 		result.EndDate.Format("2006-01-02"))
 
-	// Print authored PRs
-	fmt.Fprintf(writer, "\nPull Requests you authored (%d):\n", len(authoredPRs))
-	for _, pr := range authoredPRs {
+	// Print valuable PRs
+	fmt.Fprintf(writer, "\nValuable Pull Requests you authored (%d):\n", len(valuablePRs))
+	for _, pr := range valuablePRs {
+		fmt.Fprintf(writer, "- %s: %s\n", pr.CreatedAt.Format("2006-01-02 15:04"), pr.Title)
+		fmt.Fprintf(writer, "  URL: %s\n", pr.URL)
+		fmt.Fprintf(writer, "  Repository: %s\n", g.extractRepoFromURL(pr.RepositoryURL))
+		
+		// Display labels if any
+		if len(pr.Labels) > 0 {
+			labelNames := make([]string, len(pr.Labels))
+			for i, label := range pr.Labels {
+				labelNames[i] = label.Name
+			}
+			fmt.Fprintf(writer, "  Labels: %s\n", strings.Join(labelNames, ", "))
+		}
+		
+		fmt.Fprintln(writer)
+	}
+
+	// Print low-value PRs
+	fmt.Fprintf(writer, "Low-value Pull Requests you authored (%d):\n", len(lowValuePRs))
+	for _, pr := range lowValuePRs {
 		fmt.Fprintf(writer, "- %s: %s\n", pr.CreatedAt.Format("2006-01-02 15:04"), pr.Title)
 		fmt.Fprintf(writer, "  URL: %s\n", pr.URL)
 		fmt.Fprintf(writer, "  Repository: %s\n", g.extractRepoFromURL(pr.RepositoryURL))

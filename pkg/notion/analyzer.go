@@ -23,6 +23,7 @@ type NotionAnalyzer struct {
 	token          string
 	client         *common.HTTPClient
 	categoryConfig *config.CategorizationConfig
+	relationCache  map[string]string // Cache for relation page titles
 }
 
 // User represents a Notion user
@@ -94,6 +95,7 @@ func NewNotionAnalyzer() *NotionAnalyzer {
 		token:          os.Getenv("NOTION_TOKEN"),
 		client:         client,
 		categoryConfig: categoryConfig,
+		relationCache:  make(map[string]string),
 	}
 }
 
@@ -454,6 +456,34 @@ func (n *NotionAnalyzer) getUserName(userID string) string {
 	return user.Name
 }
 
+// getRelatedPageTitle retrieves the title of a related page by its ID with caching
+func (n *NotionAnalyzer) getRelatedPageTitle(pageID string) string {
+	// Check cache first
+	if title, exists := n.relationCache[pageID]; exists {
+		return title
+	}
+
+	url := fmt.Sprintf("%s/pages/%s", notionAPIURL, pageID)
+	body, err := n.client.Get(url, nil)
+	if err != nil {
+		// Cache empty result to avoid repeated failed requests
+		n.relationCache[pageID] = ""
+		return ""
+	}
+
+	var page Page
+	if err := json.Unmarshal(body, &page); err != nil {
+		// Cache empty result to avoid repeated failed requests
+		n.relationCache[pageID] = ""
+		return ""
+	}
+
+	title := n.extractPageTitle(page)
+	// Cache the result for future use
+	n.relationCache[pageID] = title
+	return title
+}
+
 func (n *NotionAnalyzer) extractPageTitle(page Page) string {
 	// Look for the actual title property (type: "title")
 	for _, value := range page.Properties {
@@ -485,6 +515,96 @@ func (n *NotionAnalyzer) extractTextFromRichTextArray(richTextArray []interface{
 	}
 
 	return strings.Join(textParts, "")
+}
+
+// extractPropertyValue extracts the value of a property based on its type
+func (n *NotionAnalyzer) extractPropertyValue(property interface{}) string {
+	if prop, ok := property.(map[string]interface{}); ok {
+		propType, exists := prop["type"].(string)
+		if !exists {
+			return ""
+		}
+
+		switch propType {
+		case "select":
+			if selectProp, ok := prop["select"].(map[string]interface{}); ok {
+				if name, ok := selectProp["name"].(string); ok {
+					return name
+				}
+			}
+		case "relation":
+			// Handle database relations
+			if relationArray, ok := prop["relation"].([]interface{}); ok {
+				if len(relationArray) > 0 {
+					// Get the actual page titles from relation IDs
+					var relationTitles []string
+					for _, rel := range relationArray {
+						if relObj, ok := rel.(map[string]interface{}); ok {
+							if pageID, ok := relObj["id"].(string); ok {
+								if title := n.getRelatedPageTitle(pageID); title != "" {
+									relationTitles = append(relationTitles, title)
+								}
+							}
+						}
+					}
+					if len(relationTitles) > 0 {
+						return strings.Join(relationTitles, ", ")
+					}
+					return fmt.Sprintf("関連あり (%d項目)", len(relationArray))
+				}
+			}
+		case "number":
+			if number, ok := prop["number"].(float64); ok {
+				// Check if it's a whole number to avoid unnecessary decimal places
+				if number == float64(int(number)) {
+					return fmt.Sprintf("%.0f", number)
+				} else {
+					return fmt.Sprintf("%.1f", number)
+				}
+			}
+		case "rich_text":
+			if richTextArray, ok := prop["rich_text"].([]interface{}); ok {
+				return n.extractTextFromRichTextArray(richTextArray)
+			}
+		case "title":
+			if titleArray, ok := prop["title"].([]interface{}); ok {
+				return n.extractTextFromRichTextArray(titleArray)
+			}
+		}
+	}
+	return ""
+}
+
+// getPageProperties extracts specific properties from a page
+func (n *NotionAnalyzer) getPageProperties(page Page) (project string, workTime string) {
+	if page.Properties == nil {
+		return "", ""
+	}
+
+	// Debug: log all property names to understand the structure
+	for propName, propValue := range page.Properties {
+		if strings.Contains(propName, "プロジェクト") || strings.Contains(propName, "🚀") {
+			project = n.extractPropertyValue(propValue)
+		}
+		if strings.Contains(propName, "作業時間") {
+			workTime = n.extractPropertyValue(propValue)
+		}
+	}
+
+	// Fallback: try exact matches
+	if project == "" {
+		if projectProp, exists := page.Properties["🚀 プロジェクト"]; exists {
+			project = n.extractPropertyValue(projectProp)
+		}
+	}
+
+	if workTime == "" {
+		if workTimeProp, exists := page.Properties["作業時間"]; exists {
+			workTime = n.extractPropertyValue(workTimeProp)
+		}
+	}
+
+	return project, workTime
 }
 
 func (n *NotionAnalyzer) categorizePages(pages []Page, userID string) (created []Page, updated []Page) {
@@ -528,6 +648,16 @@ func (n *NotionAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 	for _, page := range createdPages {
 		fmt.Fprintf(writer, "- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
 		fmt.Fprintf(writer, "  URL: %s\n", page.URL)
+		
+		// Display properties if they exist
+		project, workTime := n.getPageProperties(page)
+		if project != "" {
+			fmt.Fprintf(writer, "  🚀 プロジェクト: %s\n", project)
+		}
+		if workTime != "" {
+			fmt.Fprintf(writer, "  作業時間: %s\n", workTime)
+		}
+		
 		fmt.Fprintln(writer)
 	}
 
@@ -535,6 +665,15 @@ func (n *NotionAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 	for _, page := range updatedPages {
 		fmt.Fprintf(writer, "- %s: %s\n", page.LastEditedTime.Format("2006-01-02 15:04"), page.Title)
 		fmt.Fprintf(writer, "  URL: %s\n", page.URL)
+
+		// Display properties if they exist
+		project, workTime := n.getPageProperties(page)
+		if project != "" {
+			fmt.Fprintf(writer, "  🚀 プロジェクト: %s\n", project)
+		}
+		if workTime != "" {
+			fmt.Fprintf(writer, "  作業時間: %s\n", workTime)
+		}
 
 		creatorName := page.CreatedBy.Name
 		if creatorName == "" {

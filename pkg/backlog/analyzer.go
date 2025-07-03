@@ -58,6 +58,14 @@ type Activity struct {
 	Created time.Time              `json:"created"`
 }
 
+// ActivityItem represents a simplified activity item for listing
+type ActivityItem struct {
+	ID      int
+	Title   string
+	Created time.Time
+	Type    string
+}
+
 // NewBacklogAnalyzer creates a new Backlog analyzer
 func NewBacklogAnalyzer() *BacklogAnalyzer {
 	return &BacklogAnalyzer{
@@ -142,6 +150,12 @@ func (b *BacklogAnalyzer) Analyze(config *common.Config, writer io.Writer) (*com
 	// Analyze activities
 	activityStats := b.analyzeActivities(writer, activities)
 
+	// Extract detailed activity lists
+	commentedIssues := b.extractCommentedIssues(activities)
+	updatedIssues := b.extractUpdatedIssues(activities)
+	updatedWikis := b.extractUpdatedWikis(activities)
+	createdWikis := b.extractCreatedWikis(activities)
+
 	// Create result
 	result := &common.AnalysisResult{
 		AnalyzerName: b.GetName(),
@@ -150,18 +164,26 @@ func (b *BacklogAnalyzer) Analyze(config *common.Config, writer io.Writer) (*com
 		Summary: map[string]interface{}{
 			"Issues created":   len(createdIssues),
 			"Issues assigned":  len(assignedIssues),
+			"Issues commented": len(commentedIssues),
+			"Issues updated":   len(updatedIssues),
+			"Wikis created":    len(createdWikis),
+			"Wikis updated":    len(updatedWikis),
 			"Total activities": len(activities),
 			"Activity types":   len(activityStats),
 		},
 		Details: map[string]interface{}{
-			"created_issues":  createdIssues,
-			"assigned_issues": assignedIssues,
-			"activities":      activities,
-			"activity_stats":  activityStats,
+			"created_issues":   createdIssues,
+			"assigned_issues":  assignedIssues,
+			"commented_issues": commentedIssues,
+			"updated_issues":   updatedIssues,
+			"created_wikis":    createdWikis,
+			"updated_wikis":    updatedWikis,
+			"activities":       activities,
+			"activity_stats":   activityStats,
 		},
 	}
 
-	b.printResults(writer, result, createdIssues, assignedIssues, activityStats)
+	b.printResults(writer, result, createdIssues, assignedIssues, commentedIssues, updatedIssues, createdWikis, updatedWikis, activityStats)
 	return result, nil
 }
 
@@ -337,7 +359,127 @@ func (b *BacklogAnalyzer) analyzeActivities(writer io.Writer, activities []Activ
 	return stats
 }
 
-func (b *BacklogAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, createdIssues, assignedIssues []Issue, activityStats map[string]int) {
+func (b *BacklogAnalyzer) extractCommentedIssues(activities []Activity) []ActivityItem {
+	var items []ActivityItem
+	seen := make(map[int]bool)
+
+	for _, activity := range activities {
+		if activity.Type == 3 {
+			if content, ok := activity.Content["summary"].(string); ok {
+				if id, ok := activity.Content["id"].(float64); ok {
+					itemID := int(id)
+					if !seen[itemID] {
+						items = append(items, ActivityItem{
+							ID:      itemID,
+							Title:   content,
+							Created: activity.Created,
+							Type:    "Comment",
+						})
+						seen[itemID] = true
+					}
+				}
+			}
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Created.After(items[j].Created)
+	})
+
+	return items
+}
+
+func (b *BacklogAnalyzer) extractUpdatedIssues(activities []Activity) []ActivityItem {
+	var items []ActivityItem
+	seen := make(map[int]bool)
+
+	for _, activity := range activities {
+		if activity.Type == 2 || activity.Type == 14 {
+			if content, ok := activity.Content["summary"].(string); ok {
+				if id, ok := activity.Content["id"].(float64); ok {
+					itemID := int(id)
+					if !seen[itemID] {
+						items = append(items, ActivityItem{
+							ID:      itemID,
+							Title:   content,
+							Created: activity.Created,
+							Type:    "Update",
+						})
+						seen[itemID] = true
+					}
+				}
+			}
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Created.After(items[j].Created)
+	})
+
+	return items
+}
+
+func (b *BacklogAnalyzer) extractUpdatedWikis(activities []Activity) []ActivityItem {
+	var items []ActivityItem
+	seen := make(map[int]bool)
+
+	for _, activity := range activities {
+		if activity.Type == 6 {
+			if content, ok := activity.Content["name"].(string); ok {
+				if id, ok := activity.Content["id"].(float64); ok {
+					itemID := int(id)
+					if !seen[itemID] {
+						items = append(items, ActivityItem{
+							ID:      itemID,
+							Title:   content,
+							Created: activity.Created,
+							Type:    "Wiki Update",
+						})
+						seen[itemID] = true
+					}
+				}
+			}
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Created.After(items[j].Created)
+	})
+
+	return items
+}
+
+func (b *BacklogAnalyzer) extractCreatedWikis(activities []Activity) []ActivityItem {
+	var items []ActivityItem
+	seen := make(map[int]bool)
+
+	for _, activity := range activities {
+		if activity.Type == 5 {
+			if content, ok := activity.Content["name"].(string); ok {
+				if id, ok := activity.Content["id"].(float64); ok {
+					itemID := int(id)
+					if !seen[itemID] {
+						items = append(items, ActivityItem{
+							ID:      itemID,
+							Title:   content,
+							Created: activity.Created,
+							Type:    "Wiki Creation",
+						})
+						seen[itemID] = true
+					}
+				}
+			}
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Created.After(items[j].Created)
+	})
+
+	return items
+}
+
+func (b *BacklogAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, createdIssues, assignedIssues []Issue, commentedIssues, updatedIssues, createdWikis, updatedWikis []ActivityItem, activityStats map[string]int) {
 	fmt.Fprintf(writer, "\nBacklog activity from %s to %s:\n",
 		result.StartDate.Format("2006-01-02"),
 		result.EndDate.Format("2006-01-02"))
@@ -358,6 +500,34 @@ func (b *BacklogAnalyzer) printResults(writer io.Writer, result *common.Analysis
 		if issue.CreatedUser.ID != 0 {
 			fmt.Fprintf(writer, "  Created by: %s\n", issue.CreatedUser.Name)
 		}
+		fmt.Fprintln(writer)
+	}
+
+	fmt.Fprintf(writer, "Issues you commented on (%d):\n", len(commentedIssues))
+	for _, item := range commentedIssues {
+		fmt.Fprintf(writer, "- %s: %s\n", item.Created.Format("2006-01-02 15:04"), item.Title)
+		fmt.Fprintf(writer, "  Type: %s\n", item.Type)
+		fmt.Fprintln(writer)
+	}
+
+	fmt.Fprintf(writer, "Issues you updated (%d):\n", len(updatedIssues))
+	for _, item := range updatedIssues {
+		fmt.Fprintf(writer, "- %s: %s\n", item.Created.Format("2006-01-02 15:04"), item.Title)
+		fmt.Fprintf(writer, "  Type: %s\n", item.Type)
+		fmt.Fprintln(writer)
+	}
+
+	fmt.Fprintf(writer, "Wikis you created (%d):\n", len(createdWikis))
+	for _, item := range createdWikis {
+		fmt.Fprintf(writer, "- %s: %s\n", item.Created.Format("2006-01-02 15:04"), item.Title)
+		fmt.Fprintf(writer, "  Type: %s\n", item.Type)
+		fmt.Fprintln(writer)
+	}
+
+	fmt.Fprintf(writer, "Wikis you updated (%d):\n", len(updatedWikis))
+	for _, item := range updatedWikis {
+		fmt.Fprintf(writer, "- %s: %s\n", item.Created.Format("2006-01-02 15:04"), item.Title)
+		fmt.Fprintf(writer, "  Type: %s\n", item.Type)
 		fmt.Fprintln(writer)
 	}
 

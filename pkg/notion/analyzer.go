@@ -342,8 +342,10 @@ func (n *NotionAnalyzer) searchPages(writer io.Writer, userID string, startDate,
 			isUserInvolved := (page.CreatedBy.ID == specifiedUserID) || (page.LastEditedBy.ID == specifiedUserID)
 
 			// Check if activity happened in date range
+			// Extend END_DATE by 10 days for search purposes while keeping original for file/directory names
+			endDateExtended := endDate.AddDate(0, 0, 10) // Add 10 days to END_DATE for search
 			inDateRange := (page.CreatedTime.After(startDate) && page.CreatedTime.Before(endDate.AddDate(0, 0, 1))) ||
-				(page.LastEditedTime.After(startDate) && page.LastEditedTime.Before(endDate.AddDate(0, 0, 1)))
+				(page.LastEditedTime.After(startDate) && page.LastEditedTime.Before(endDateExtended.AddDate(0, 0, 1)))
 
 			if inDateRange {
 				pagesInRange++
@@ -403,7 +405,25 @@ func (n *NotionAnalyzer) searchPages(writer io.Writer, userID string, startDate,
 	}
 
 	fmt.Fprintf(writer, "Total API requests made: %d\n", requestCount)
+	
+	fmt.Fprintf(writer, "Total unique pages found: %d\n", len(allPages))
 	return allPages, nil
+}
+
+// getPageDetails fetches detailed information for a specific page
+func (n *NotionAnalyzer) getPageDetails(pageID string) (*Page, error) {
+	url := fmt.Sprintf("%s/pages/%s", notionAPIURL, pageID)
+	body, err := n.client.Get(url, nil)
+	if err != nil {
+		return nil, err
+	}
+	
+	var page Page
+	if err := json.Unmarshal(body, &page); err != nil {
+		return nil, err
+	}
+	
+	return &page, nil
 }
 
 func (n *NotionAnalyzer) parseDatabaseParent(result json.RawMessage) (string, bool) {

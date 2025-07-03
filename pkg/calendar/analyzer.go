@@ -419,6 +419,9 @@ func (c *CalendarAnalyzer) printResults(writer io.Writer, result *common.Analysi
 	sortedByCount := make([]TitleStats, len(titleStats))
 	copy(sortedByCount, titleStats)
 	sort.Slice(sortedByCount, func(i, j int) bool {
+		if sortedByCount[i].Count == sortedByCount[j].Count {
+			return sortedByCount[i].Title < sortedByCount[j].Title
+		}
 		return sortedByCount[i].Count > sortedByCount[j].Count
 	})
 
@@ -437,6 +440,9 @@ func (c *CalendarAnalyzer) printResults(writer io.Writer, result *common.Analysi
 	sortedByDuration := make([]TitleStats, len(titleStats))
 	copy(sortedByDuration, titleStats)
 	sort.Slice(sortedByDuration, func(i, j int) bool {
+		if sortedByDuration[i].Duration == sortedByDuration[j].Duration {
+			return sortedByDuration[i].Title < sortedByDuration[j].Title
+		}
 		return sortedByDuration[i].Duration > sortedByDuration[j].Duration
 	})
 
@@ -455,6 +461,9 @@ func (c *CalendarAnalyzer) printResults(writer io.Writer, result *common.Analysi
 		sortedByDays := make([]TitleStats, len(allDayStats))
 		copy(sortedByDays, allDayStats)
 		sort.Slice(sortedByDays, func(i, j int) bool {
+			if sortedByDays[i].Duration == sortedByDays[j].Duration {
+				return sortedByDays[i].Title < sortedByDays[j].Title
+			}
 			return sortedByDays[i].Duration > sortedByDays[j].Duration
 		})
 
@@ -597,6 +606,9 @@ func (c *CalendarAnalyzer) analyzeWorkingHours(events []Event) *WorkingHoursStat
 	}
 
 	sort.Slice(hourList, func(i, j int) bool {
+		if hourList[i].duration == hourList[j].duration {
+			return hourList[i].hour < hourList[j].hour
+		}
 		return hourList[i].duration > hourList[j].duration
 	})
 

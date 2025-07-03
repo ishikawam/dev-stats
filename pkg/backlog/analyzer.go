@@ -544,6 +544,9 @@ func (b *BacklogAnalyzer) printResults(writer io.Writer, result *common.Analysis
 		sortedStats = append(sortedStats, activityStat{name, count})
 	}
 	sort.Slice(sortedStats, func(i, j int) bool {
+		if sortedStats[i].count == sortedStats[j].count {
+			return sortedStats[i].name < sortedStats[j].name
+		}
 		return sortedStats[i].count > sortedStats[j].count
 	})
 	for i, stat := range sortedStats {

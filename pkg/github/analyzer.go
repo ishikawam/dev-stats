@@ -20,6 +20,12 @@ type GitHubAnalyzer struct {
 	client   *common.HTTPClient
 }
 
+// Label represents a GitHub label
+type Label struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
+}
+
 // PullRequest represents a GitHub pull request
 type PullRequest struct {
 	Title     string    `json:"title"`
@@ -28,8 +34,9 @@ type PullRequest struct {
 	User      struct {
 		Login string `json:"login"`
 	} `json:"user"`
-	RepositoryURL string `json:"repository_url"`
-	Number        int    `json:"number"`
+	RepositoryURL string  `json:"repository_url"`
+	Number        int     `json:"number"`
+	Labels        []Label `json:"labels"`
 }
 
 // ReviewComment represents a PR review comment
@@ -128,6 +135,7 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 	// Analyze results
 	orgStats := make(map[string]struct{ authored, involved int })
 	repoStats := make(map[string]struct{ authored, involved int })
+	labelStats := make(map[string]int)
 
 	for _, pr := range authoredPRs {
 		fullName := g.extractRepoFromURL(pr.RepositoryURL)
@@ -146,6 +154,15 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 			repoStats[repoName] = stat
 		} else {
 			repoStats[repoName] = struct{ authored, involved int }{authored: 1, involved: 0}
+		}
+
+		// Count labels
+		if len(pr.Labels) == 0 {
+			labelStats["No labels"]++
+		} else {
+			for _, label := range pr.Labels {
+				labelStats[label.Name]++
+			}
 		}
 	}
 
@@ -180,6 +197,7 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 			"Total PRs (involves)": len(involvedPRs),
 			"Active organizations": len(orgStats),
 			"Active repositories":  len(repoStats),
+			"Unique labels":        len(labelStats),
 			"Reviews given":        reviewStats.ReviewsGiven,
 			"Approvals given":      reviewStats.ApprovalsGiven,
 			"Review comments":      reviewStats.CommentsGiven,
@@ -190,11 +208,12 @@ func (g *GitHubAnalyzer) Analyze(config *common.Config, writer io.Writer) (*comm
 			"involved_prs": involvedPRs,
 			"org_stats":    orgStats,
 			"repo_stats":   repoStats,
+			"label_stats":  labelStats,
 			"review_stats": reviewStats,
 		},
 	}
 
-	g.printResults(writer, result, authoredPRs, involvedPRs, orgStats, repoStats, reviewStats)
+	g.printResults(writer, result, authoredPRs, involvedPRs, orgStats, repoStats, labelStats, reviewStats)
 	return result, nil
 }
 
@@ -257,7 +276,7 @@ func (g *GitHubAnalyzer) extractRepoName(fullName string) string {
 	return fullName
 }
 
-func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, authoredPRs, involvedPRs []PullRequest, orgStats, repoStats map[string]struct{ authored, involved int }, reviewStats *ReviewStats) {
+func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, authoredPRs, involvedPRs []PullRequest, orgStats, repoStats map[string]struct{ authored, involved int }, labelStats map[string]int, reviewStats *ReviewStats) {
 	fmt.Fprintf(writer, "\nPull Requests from %s to %s:\n",
 		result.StartDate.Format("2006-01-02"),
 		result.EndDate.Format("2006-01-02"))
@@ -268,6 +287,16 @@ func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 		fmt.Fprintf(writer, "- %s: %s\n", pr.CreatedAt.Format("2006-01-02 15:04"), pr.Title)
 		fmt.Fprintf(writer, "  URL: %s\n", pr.URL)
 		fmt.Fprintf(writer, "  Repository: %s\n", g.extractRepoFromURL(pr.RepositoryURL))
+		
+		// Display labels if any
+		if len(pr.Labels) > 0 {
+			labelNames := make([]string, len(pr.Labels))
+			for i, label := range pr.Labels {
+				labelNames[i] = label.Name
+			}
+			fmt.Fprintf(writer, "  Labels: %s\n", strings.Join(labelNames, ", "))
+		}
+		
 		fmt.Fprintln(writer)
 	}
 
@@ -314,6 +343,31 @@ func (g *GitHubAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 	})
 	for _, stat := range sortedRepos {
 		fmt.Fprintf(writer, "- %s: %d (%d)\n", stat.name, stat.authored, stat.involved)
+	}
+
+	// Print label stats
+	fmt.Fprintln(writer, "\nLabel usage statistics:")
+	type labelStat struct {
+		name  string
+		count int
+	}
+	var sortedLabels []labelStat
+	for name, count := range labelStats {
+		sortedLabels = append(sortedLabels, labelStat{name, count})
+	}
+	sort.Slice(sortedLabels, func(i, j int) bool {
+		if sortedLabels[i].count == sortedLabels[j].count {
+			return sortedLabels[i].name < sortedLabels[j].name
+		}
+		return sortedLabels[i].count > sortedLabels[j].count
+	})
+	
+	if len(sortedLabels) == 0 {
+		fmt.Fprintln(writer, "- No labels found in authored PRs")
+	} else {
+		for _, stat := range sortedLabels {
+			fmt.Fprintf(writer, "- %s: %d\n", stat.name, stat.count)
+		}
 	}
 }
 

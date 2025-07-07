@@ -11,6 +11,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - The user wants to review changes before they are committed to version control
 - This rule is non-negotiable and must be followed at all times
 
+**PRIVACY AND SECURITY RULES**
+- NEVER delete or modify files that are NOT tracked by git (use `git ls-files` to check)
+- Personal `.env` files contain private tokens and credentials - do NOT modify them unless explicitly asked
+- Files in `notion-downloads/` and user-created files in `notion-urls/` contain private data
+- Only modify tracked template files like `.env.example` and `.sample.md`
+- When working with private data, always distinguish between:
+  - Git-tracked files (safe to modify for open source)
+  - User's private files (never touch without permission)
+- Always check `git status` and `git ls-files` before making changes to understand what's tracked
+- NEVER hardcode private information (URLs, names, tokens) in code or tracked files
+
 ## Project Overview
 
 A Go-based tool that analyzes GitHub, Backlog, Calendar, and Notion productivity by fetching and summarizing activity data within specified date ranges. The tool provides statistics on pull requests, issues, activities, calendar events, and Notion pages across different repositories, organizations, and time periods.
@@ -89,6 +100,12 @@ make run-all        # All analyzers
 ./dev-stats -help    # Show help
 ```
 
+**Notion page download:**
+```bash
+make download       # Downloads Notion pages specified in notion-urls/${START_DATE}_to_${END_DATE}.md
+# or: ./dev-stats -download notion-urls/YYYY-MM-DD_to_YYYY-MM-DD.md
+```
+
 
 **Code quality checks:**
 ```bash
@@ -126,6 +143,15 @@ make check  # Run all checks
 - Smart pagination with early termination for performance optimization
 - Caches database titles and user names to minimize API calls
 - Extracts page titles from properties with `type: "title"`
+
+**Notion Page Downloader:**
+- Downloads specific Notion pages to markdown files based on URLs listed in markdown files
+- Automatically updates page titles with actual Notion page titles after fetching
+- Uses category names from markdown file as directory names (no hardcoded mappings)
+- Preserves spaces in filenames, only sanitizes filesystem-incompatible characters
+- Automatically updates the original markdown file with actual page titles
+- File structure: `notion-downloads/YYYY-MM-DD_to_YYYY-MM-DD/Category Name/Page Title.md`
+- Creates comprehensive markdown output with metadata, properties, and full content
 
 **Data Processing:**
 - Deduplicates PRs/issues using URL/ID as unique keys

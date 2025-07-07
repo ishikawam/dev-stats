@@ -405,7 +405,7 @@ func (n *NotionAnalyzer) searchPages(writer io.Writer, userID string, startDate,
 	}
 
 	fmt.Fprintf(writer, "Total API requests made: %d\n", requestCount)
-	
+
 	fmt.Fprintf(writer, "Total unique pages found: %d\n", len(allPages))
 	return allPages, nil
 }
@@ -417,12 +417,12 @@ func (n *NotionAnalyzer) getPageDetails(pageID string) (*Page, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var page Page
 	if err := json.Unmarshal(body, &page); err != nil {
 		return nil, err
 	}
-	
+
 	return &page, nil
 }
 

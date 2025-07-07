@@ -20,6 +20,7 @@ import (
 func main() {
 	var (
 		analyzerFlag = flag.String("analyzer", "", "Analyzer to run (github,backlog,calendar,notion,all)")
+		downloadFlag = flag.String("download", "", "Download Notion pages from markdown file")
 		helpFlag     = flag.Bool("help", false, "Show help")
 		listFlag     = flag.Bool("list", false, "List available analyzers")
 	)
@@ -32,6 +33,12 @@ func main() {
 
 	if *listFlag {
 		printAvailableAnalyzers()
+		return
+	}
+
+	// Handle download mode
+	if *downloadFlag != "" {
+		handleDownload(*downloadFlag)
 		return
 	}
 
@@ -149,14 +156,37 @@ func createOutputDirectory(startDate, endDate time.Time) string {
 	return outputDir
 }
 
+// handleDownload handles the download functionality
+func handleDownload(markdownFile string) {
+	downloader := notion.NewNotionDownloader()
+
+	// Load configuration from markdown file
+	config, err := downloader.LoadFromMarkdown(markdownFile)
+	if err != nil {
+		log.Fatalf("Failed to load markdown file: %v", err)
+	}
+
+	fmt.Printf("Loaded configuration for period: %s to %s\n", config.StartDate, config.EndDate)
+	fmt.Printf("Output directory: %s\n", config.OutputDir)
+
+	// Download pages
+	if err := downloader.DownloadPages(config, os.Stdout); err != nil {
+		log.Fatalf("Failed to download pages: %v", err)
+	}
+
+	fmt.Println("Download completed successfully!")
+}
+
 func printHelp() {
 	fmt.Println("dev-stats - Development Statistics Analyzer")
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  dev-stats -analyzer <analyzer_name>")
+	fmt.Println("  dev-stats -download <markdown_file>")
 	fmt.Println()
 	fmt.Println("Flags:")
 	fmt.Println("  -analyzer string    Analyzer to run (github,backlog,calendar,notion,all)")
+	fmt.Println("  -download string    Download Notion pages from markdown file")
 	fmt.Println("  -list              List available analyzers")
 	fmt.Println("  -help              Show this help message")
 	fmt.Println()
@@ -164,6 +194,7 @@ func printHelp() {
 	fmt.Println("  dev-stats -analyzer github")
 	fmt.Println("  dev-stats -analyzer github,backlog")
 	fmt.Println("  dev-stats -analyzer all")
+	fmt.Println("  dev-stats -download notion-urls/YYYY-MM-DD_to_YYYY-MM-DD.md")
 	fmt.Println()
 	fmt.Println("Environment Variables:")
 	fmt.Println("  START_DATE         Start date in YYYY-MM-DD format")

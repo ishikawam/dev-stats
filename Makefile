@@ -11,6 +11,7 @@ help:
 	@echo "  run-calendar - Run Calendar analysis"
 	@echo "  run-notion   - Run Notion analysis"
 	@echo "  run-all      - Run all analyzers"
+	@echo "  download     - Download Notion pages from markdown"
 	@echo "  fmt          - Format code"
 	@echo "  vet          - Run go vet"
 	@echo "  check        - Run fmt, vet, and test"
@@ -44,6 +45,9 @@ run-notion: build
 run-all: build
 	./bin/dev-stats -analyzer all
 
+# Download Notion pages
+download: build
+	set -a && source .env && set +a && ./bin/dev-stats -download notion-urls/$${START_DATE}_to_$${END_DATE}.md
 
 # Format code
 fmt:

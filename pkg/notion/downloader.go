@@ -431,10 +431,10 @@ func (d *NotionDownloader) convertToMarkdown(page *Page, blocks []map[string]int
 		if project != "" || workTime != "" {
 			md.WriteString("## Properties\n\n")
 			if project != "" {
-				md.WriteString(fmt.Sprintf("- **プロジェクト:** %s\n", project))
+				md.WriteString(fmt.Sprintf("- **Project:** %s\n", project))
 			}
 			if workTime != "" {
-				md.WriteString(fmt.Sprintf("- **作業時間:** %s\n", workTime))
+				md.WriteString(fmt.Sprintf("- **Work Time:** %s\n", workTime))
 			}
 			md.WriteString("\n")
 		}
@@ -575,10 +575,13 @@ func (d *NotionDownloader) getPageProperties(page Page) (project string, workTim
 	}
 
 	for propName, propValue := range page.Properties {
-		if strings.Contains(propName, "プロジェクト") {
+		// Check for project-related properties (supports multiple languages)
+		if strings.Contains(strings.ToLower(propName), "project") || strings.Contains(propName, "プロジェクト") {
 			project = d.extractPropertyValue(propValue)
 		}
-		if strings.Contains(propName, "作業時間") {
+		// Check for work time properties (supports multiple languages)
+		if strings.Contains(strings.ToLower(propName), "work") && strings.Contains(strings.ToLower(propName), "time") || 
+		   strings.Contains(propName, "作業時間") {
 			workTime = d.extractPropertyValue(propValue)
 		}
 	}

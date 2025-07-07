@@ -602,10 +602,13 @@ func (n *NotionAnalyzer) getPageProperties(page Page) (project string, workTime 
 
 	// Debug: log all property names to understand the structure
 	for propName, propValue := range page.Properties {
-		if strings.Contains(propName, "プロジェクト") {
+		// Check for project-related properties (supports multiple languages)
+		if strings.Contains(strings.ToLower(propName), "project") || strings.Contains(propName, "プロジェクト") {
 			project = n.extractPropertyValue(propValue)
 		}
-		if strings.Contains(propName, "作業時間") {
+		// Check for work time properties (supports multiple languages)
+		if strings.Contains(strings.ToLower(propName), "work") && strings.Contains(strings.ToLower(propName), "time") || 
+		   strings.Contains(propName, "作業時間") {
 			workTime = n.extractPropertyValue(propValue)
 		}
 	}
@@ -664,10 +667,10 @@ func (n *NotionAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 		// Display properties if they exist
 		project, workTime := n.getPageProperties(page)
 		if project != "" {
-			fmt.Fprintf(writer, "  プロジェクト: %s\n", project)
+			fmt.Fprintf(writer, "  Project: %s\n", project)
 		}
 		if workTime != "" {
-			fmt.Fprintf(writer, "  作業時間: %s\n", workTime)
+			fmt.Fprintf(writer, "  Work Time: %s\n", workTime)
 		}
 
 		fmt.Fprintln(writer)
@@ -681,10 +684,10 @@ func (n *NotionAnalyzer) printResults(writer io.Writer, result *common.AnalysisR
 		// Display properties if they exist
 		project, workTime := n.getPageProperties(page)
 		if project != "" {
-			fmt.Fprintf(writer, "  プロジェクト: %s\n", project)
+			fmt.Fprintf(writer, "  Project: %s\n", project)
 		}
 		if workTime != "" {
-			fmt.Fprintf(writer, "  作業時間: %s\n", workTime)
+			fmt.Fprintf(writer, "  Work Time: %s\n", workTime)
 		}
 
 		creatorName := page.CreatedBy.Name

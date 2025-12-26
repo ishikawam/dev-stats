@@ -254,7 +254,7 @@ Successfully parsed 1234 events from storage/calendar/calendar.ics
 Total events parsed from all files: 1234
 
 Calendar events from 2024-01-01 to 2024-01-31:
-- 2024-01-01 15:00: 祝日 (-)
+- 2024-01-01 15:00: Holiday (-)
 - 2024-01-02 09:00: Team Meeting (1h0m)
 - 2024-01-03 10:30: Project Review (2h0m)
 ...
@@ -278,8 +278,8 @@ Top events by total duration (all):
 ...
 
 All-day events ranking by total days (all):
- 1. 祝日: 3 days (3 events)
- 2. 休暇: 2 days (1 events)
+ 1. Holiday: 3 days (3 events)
+ 2. Vacation: 2 days (1 events)
 ...
 ```
 

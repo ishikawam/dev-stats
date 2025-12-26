@@ -569,7 +569,7 @@ func (n *NotionAnalyzer) extractPropertyValue(property interface{}) string {
 					if len(relationTitles) > 0 {
 						return strings.Join(relationTitles, ", ")
 					}
-					return fmt.Sprintf("関連あり (%d項目)", len(relationArray))
+					return fmt.Sprintf("Related (%d items)", len(relationArray))
 				}
 			}
 		case "number":
@@ -602,20 +602,20 @@ func (n *NotionAnalyzer) getPageProperties(page Page) (project string, workTime 
 
 	// Debug: log all property names to understand the structure
 	for propName, propValue := range page.Properties {
+		propNameLower := strings.ToLower(propName)
+
 		// Check for project-related properties (supports multiple languages)
-		if strings.Contains(strings.ToLower(propName), "project") || strings.Contains(propName, "プロジェクト") {
+		if strings.Contains(propNameLower, "project") || strings.Contains(propName, "プロジェクト") {
 			project = n.extractPropertyValue(propValue)
 		}
-		// Check for work time properties (supports multiple languages)
-		if strings.Contains(strings.ToLower(propName), "work") && strings.Contains(strings.ToLower(propName), "time") || 
-		   strings.Contains(propName, "作業時間") {
-			workTime = n.extractPropertyValue(propValue)
-		}
-	}
 
-	if workTime == "" {
-		if workTimeProp, exists := page.Properties["作業時間"]; exists {
-			workTime = n.extractPropertyValue(workTimeProp)
+		// Check for work time properties (supports multiple languages)
+		if strings.Contains(propName, "作業時間") ||
+			strings.Contains(propNameLower, "work time") ||
+			strings.Contains(propNameLower, "working time") ||
+			strings.Contains(propNameLower, "work hours") ||
+			strings.Contains(propNameLower, "working hours") {
+			workTime = n.extractPropertyValue(propValue)
 		}
 	}
 

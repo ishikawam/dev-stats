@@ -575,13 +575,19 @@ func (d *NotionDownloader) getPageProperties(page Page) (project string, workTim
 	}
 
 	for propName, propValue := range page.Properties {
+		propNameLower := strings.ToLower(propName)
+
 		// Check for project-related properties (supports multiple languages)
-		if strings.Contains(strings.ToLower(propName), "project") || strings.Contains(propName, "プロジェクト") {
+		if strings.Contains(propNameLower, "project") || strings.Contains(propName, "プロジェクト") {
 			project = d.extractPropertyValue(propValue)
 		}
+
 		// Check for work time properties (supports multiple languages)
-		if strings.Contains(strings.ToLower(propName), "work") && strings.Contains(strings.ToLower(propName), "time") || 
-		   strings.Contains(propName, "作業時間") {
+		if strings.Contains(propName, "作業時間") ||
+			strings.Contains(propNameLower, "work time") ||
+			strings.Contains(propNameLower, "working time") ||
+			strings.Contains(propNameLower, "work hours") ||
+			strings.Contains(propNameLower, "working hours") {
 			workTime = d.extractPropertyValue(propValue)
 		}
 	}

@@ -7,34 +7,46 @@ categories:
     keywords:
       - "mtg"
       - "meeting"
+      - "standup"
       - "朝会"
+      - "regular"
       - "定例"
       - "1on1"
+      - "consultation"
       - "相談"
+      - "technical"
       - "技術"
-    
+
   focus:
     name: "Focus time"
     keywords:
+      - "work"
       - "作業"
       - "block"
       - "focus"
+      - "development"
       - "開発"
-    
+
   learning:
     name: "Learning time"
     keywords:
-      - "研修"
-      - "学習"
-      - "勉強"
       - "training"
-    
+      - "研修"
+      - "learning"
+      - "学習"
+      - "study"
+      - "勉強"
+      - "education"
+
   admin:
     name: "Admin time"
     keywords:
+      - "application"
       - "申請"
+      - "procedure"
       - "手続き"
       - "admin"
+      - "management"
       - "管理"
 
 # Event-specific categorization rules
@@ -43,45 +55,45 @@ event_categories:
   "1on1 meetings":
     keywords: ["1on1"]
     category: "meeting"
-  
+
   "daily standups":
-    keywords: ["朝会"]
+    keywords: ["standup", "朝会"]
     category: "meeting"
-  
+
   "regular meetings":
-    keywords: ["定例"]
+    keywords: ["regular", "定例"]
     category: "meeting"
-  
+
   "general meetings":
     keywords: ["mtg", "meeting"]
     category: "meeting"
-  
+
   "focus work":
-    keywords: ["作業", "block"]
+    keywords: ["work", "作業", "block"]
     category: "focus"
-  
+
   "technical consultation":
-    keywords: ["相談", "技術"]
+    keywords: ["consultation", "相談", "technical", "技術"]
     category: "meeting"
-  
+
   "learning & training":
-    keywords: ["研修", "学習"]
+    keywords: ["training", "研修", "learning", "学習"]
     category: "learning"
-  
+
   "time off":
-    keywords: ["不在", "休み"]
+    keywords: ["absence", "不在", "off", "休み"]
     category: "other"
 
 # Notion-specific categorization rules
 notion_categories:
   "daily work log":
-    keywords: ["作業", "masayuki ishikawa"]
-    
+    keywords: ["work", "作業", "masayuki ishikawa"]
+
   "meeting notes":
-    keywords: ["朝会", "mtg", "meeting", "定例"]
-    
+    keywords: ["standup", "朝会", "mtg", "meeting", "regular", "定例"]
+
   "technical documentation":
-    keywords: ["技術", "api", "backend", "設計"]
-    
+    keywords: ["technical", "技術", "api", "backend", "design", "設計"]
+
   "project planning":
-    keywords: ["プロジェクト", "計画", "スケジュール", "mbo"]
+    keywords: ["project", "プロジェクト", "plan", "計画", "schedule", "スケジュール", "mbo"]

@@ -52,37 +52,48 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
 
 ### Backlog
 
+**Multi-Profile Support**: This tool supports multiple Backlog accounts with both `.backlog.com` and `.backlog.jp` domains.
+
 1. **Set up your environment variables**:
+    - Use the pattern `BACKLOG_<PROFILE>_<SETTING>` to define multiple profiles
     - Update the `.env` file in the project root directory:
       ```plaintext
       # .env
 
-      BACKLOG_API_KEY=your-backlog-api-key
-      BACKLOG_SPACE_NAME=your-space-name
-      BACKLOG_USER_ID=your-user-id
-      BACKLOG_PROJECT_ID=your-project-id
+      # Profile 1: HOGE (backlog.com)
+      BACKLOG_HOGE_API_KEY=your-api-key-1
+      BACKLOG_HOGE_HOST=mycompany.backlog.com
+      BACKLOG_HOGE_USER_ID=123456
+      BACKLOG_HOGE_PROJECT_ID=789012
 
-      # YYYY-MM-DD format
+      # Profile 2: FUGA (backlog.jp)
+      BACKLOG_FUGA_API_KEY=your-api-key-2
+      BACKLOG_FUGA_HOST=projectspace.backlog.jp
+      BACKLOG_FUGA_USER_ID=234567
+      BACKLOG_FUGA_PROJECT_ID=890123
+
+      # Date range (YYYY-MM-DD format)
       START_DATE=2024-01-01
       END_DATE=2024-06-30
       ```
-    - Alternatively, export the variables in your terminal:
+    - **Finding USER_ID and PROJECT_ID**:
       ```bash
-      export BACKLOG_API_KEY=your-backlog-api-key
-      export BACKLOG_SPACE_NAME=your-space-name
-      export BACKLOG_USER_ID=your-user-id
-      export BACKLOG_PROJECT_ID=your-project-id
-      export START_DATE=2024-01-01
-      export END_DATE=2024-06-30
+      # List all configured profiles
+      make list-backlog-profiles
+
+      # List all projects and members for all profiles
+      make list-backlog
       ```
 
 2. **Run the tool**:
    ```bash
    make run-backlog
    ```
+   - This command runs analysis for **all configured profiles**
 
 3. **View the output**:
-    - The results, including activity details, issue counts, and summaries, will be displayed in your terminal.
+    - Results for each profile will be displayed separately in your terminal
+    - Output files are saved to `stats/YYYY-MM-DD_to_YYYY-MM-DD/backlog-<profile>-stats.txt`
 
 ### Calendar
 
@@ -176,11 +187,17 @@ make build
 GITHUB_TOKEN=your-github-token
 GITHUB_USERNAME=your-github-username
 
-# Backlog
-BACKLOG_API_KEY=your-backlog-api-key
-BACKLOG_SPACE_NAME=your-space-name
-BACKLOG_USER_ID=your-user-id
-BACKLOG_PROJECT_ID=your-project-id
+# Backlog (Multi-Profile Support)
+# Pattern: BACKLOG_<PROFILE>_<SETTING>
+BACKLOG_HOGE_API_KEY=your-api-key-1
+BACKLOG_HOGE_HOST=mycompany.backlog.com
+BACKLOG_HOGE_USER_ID=123456
+BACKLOG_HOGE_PROJECT_ID=789012
+
+BACKLOG_FUGA_API_KEY=your-api-key-2
+BACKLOG_FUGA_HOST=projectspace.backlog.jp
+BACKLOG_FUGA_USER_ID=234567
+BACKLOG_FUGA_PROJECT_ID=890123
 
 # Notion
 NOTION_TOKEN=your-notion-integration-token

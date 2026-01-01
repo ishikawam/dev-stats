@@ -19,10 +19,14 @@ import (
 
 func main() {
 	var (
-		analyzerFlag = flag.String("analyzer", "", "Analyzer to run (github,backlog,calendar,notion,all)")
-		downloadFlag = flag.String("download", "", "Download Notion pages from markdown file")
-		helpFlag     = flag.Bool("help", false, "Show help")
-		listFlag     = flag.Bool("list", false, "List available analyzers")
+		analyzerFlag          = flag.String("analyzer", "", "Analyzer to run (github,backlog,calendar,notion,all)")
+		downloadFlag          = flag.String("download", "", "Download Notion pages from markdown file")
+		listBacklogFlag       = flag.Bool("list-backlog", false, "List Backlog projects and members for all profiles")
+		listBacklogProject    = flag.String("list-backlog-project", "", "List members of a specific Backlog project (specify project ID)")
+		listBacklogProfiles   = flag.Bool("list-backlog-profiles", false, "List all Backlog profiles")
+		listBacklogClear      = flag.Bool("list-backlog-clear", false, "Clear cache and refresh Backlog data")
+		helpFlag              = flag.Bool("help", false, "Show help")
+		listFlag              = flag.Bool("list", false, "List available analyzers")
 	)
 	flag.Parse()
 
@@ -33,6 +37,18 @@ func main() {
 
 	if *listFlag {
 		printAvailableAnalyzers()
+		return
+	}
+
+	// Handle Backlog profiles listing
+	if *listBacklogProfiles {
+		handleListBacklogProfiles()
+		return
+	}
+
+	// Handle Backlog listing mode
+	if *listBacklogFlag || *listBacklogProject != "" || *listBacklogClear {
+		handleBacklogList(*listBacklogProject, *listBacklogClear)
 		return
 	}
 
@@ -60,9 +76,10 @@ func main() {
 	if githubAnalyzer := github.NewGitHubAnalyzer(); githubAnalyzer != nil {
 		analyzers["github"] = githubAnalyzer
 	}
-	if backlogAnalyzer := backlog.NewBacklogAnalyzer(); backlogAnalyzer != nil {
-		analyzers["backlog"] = backlogAnalyzer
-	}
+
+	// Note: Backlog analyzers are handled separately due to multi-profile support
+	// They will be created dynamically when running backlog analysis
+
 	if calendarAnalyzer := calendar.NewCalendarAnalyzer(); calendarAnalyzer != nil {
 		analyzers["calendar"] = calendarAnalyzer
 	}
@@ -72,23 +89,38 @@ func main() {
 
 	// Determine which analyzers to run
 	var analyzersToRun []common.Analyzer
+	requestedAnalyzers := []string{}
+
 	if *analyzerFlag == "all" {
-		for _, analyzer := range analyzers {
-			analyzersToRun = append(analyzersToRun, analyzer)
-		}
+		requestedAnalyzers = []string{"github", "backlog", "calendar", "notion"}
 	} else {
-		requestedAnalyzers := strings.Split(*analyzerFlag, ",")
-		for _, name := range requestedAnalyzers {
-			name = strings.TrimSpace(name)
-			if analyzer, exists := analyzers[name]; exists {
-				analyzersToRun = append(analyzersToRun, analyzer)
-			} else {
-				log.Fatalf("Unknown analyzer: %s", name)
-			}
+		for _, name := range strings.Split(*analyzerFlag, ",") {
+			requestedAnalyzers = append(requestedAnalyzers, strings.TrimSpace(name))
 		}
 	}
 
-	if len(analyzersToRun) == 0 {
+	for _, name := range requestedAnalyzers {
+		if name == "backlog" {
+			// Handle Backlog separately due to multi-profile support
+			continue
+		}
+		if analyzer, exists := analyzers[name]; exists {
+			analyzersToRun = append(analyzersToRun, analyzer)
+		} else {
+			log.Fatalf("Unknown analyzer: %s", name)
+		}
+	}
+
+	// Check if backlog was requested
+	backlogRequested := false
+	for _, name := range requestedAnalyzers {
+		if name == "backlog" {
+			backlogRequested = true
+			break
+		}
+	}
+
+	if len(analyzersToRun) == 0 && !backlogRequested {
 		log.Fatal("No valid analyzers specified")
 	}
 
@@ -102,6 +134,55 @@ func main() {
 
 	// Run analyzers
 	var results []*common.AnalysisResult
+
+	// Run Backlog analyzers for all profiles
+	if backlogRequested {
+		backlogProfiles := backlog.LoadBacklogProfiles()
+		if len(backlogProfiles) == 0 {
+			log.Println("Warning: No Backlog profiles found. Please set BACKLOG_<PROFILE>_* environment variables.")
+		} else {
+			for _, profile := range backlogProfiles {
+				if !profile.IsAnalysisReady() {
+					fmt.Printf("⚠️  Backlog profile '%s' is missing USER_ID or PROJECT_ID. Skipping analysis.\n", profile.Name)
+					fmt.Printf("    Run 'make list-backlog' to find the IDs.\n\n")
+					continue
+				}
+
+				analyzer := backlog.NewBacklogAnalyzerWithProfile(&profile)
+				analyzerName := fmt.Sprintf("backlog-%s", strings.ToLower(profile.Name))
+				filename := fmt.Sprintf("%s-stats.txt", analyzerName)
+				filePath := filepath.Join(outputDir, filename)
+
+				// Create file writer
+				file, err := os.Create(filePath)
+				if err != nil {
+					log.Printf("Warning: Failed to create output file %s: %v", filePath, err)
+					continue
+				}
+				defer file.Close()
+
+				// Create multi-writer to write to both stdout and file
+				writer := io.MultiWriter(os.Stdout, file)
+
+				// Print header
+				fmt.Fprintf(writer, "\n"+strings.Repeat("=", 60)+"\n")
+				fmt.Fprintf(writer, "Running Backlog analyzer (%s)...\n", profile.Name)
+				fmt.Fprintf(writer, strings.Repeat("=", 60)+"\n")
+
+				result, err := analyzer.Analyze(config, writer)
+				if err != nil {
+					log.Printf("Error running Backlog analyzer (%s): %v", profile.Name, err)
+					continue
+				}
+
+				fmt.Fprintf(writer, "\n📁 Output saved to: %s\n", filePath)
+
+				results = append(results, result)
+			}
+		}
+	}
+
+	// Run other analyzers
 	for _, analyzer := range analyzersToRun {
 		analyzerName := strings.ToLower(strings.ReplaceAll(analyzer.GetName(), " ", "-"))
 		filename := fmt.Sprintf("%s-stats.txt", analyzerName)
@@ -156,6 +237,102 @@ func createOutputDirectory(startDate, endDate time.Time) string {
 	return outputDir
 }
 
+// handleListBacklogProfiles lists all Backlog profiles
+func handleListBacklogProfiles() {
+	profiles := backlog.LoadBacklogProfiles()
+
+	if len(profiles) == 0 {
+		fmt.Println("No Backlog profiles found.")
+		fmt.Println("\nTo configure Backlog profiles, set environment variables with pattern:")
+		fmt.Println("  BACKLOG_<PROFILE_NAME>_API_KEY")
+		fmt.Println("  BACKLOG_<PROFILE_NAME>_HOST            (e.g., mycompany.backlog.com)")
+		fmt.Println("  BACKLOG_<PROFILE_NAME>_USER_ID         (optional, for analysis)")
+		fmt.Println("  BACKLOG_<PROFILE_NAME>_PROJECT_ID      (optional, for analysis)")
+		fmt.Println("\nExample:")
+		fmt.Println("  BACKLOG_HOGE_API_KEY=your-api-key")
+		fmt.Println("  BACKLOG_HOGE_HOST=mycompany.backlog.com")
+		return
+	}
+
+	fmt.Println("\n=== Backlog Profiles ===\n")
+	fmt.Printf("%-15s %-35s %-12s %-12s %s\n", "Profile", "Host", "User ID", "Project ID", "Status")
+	fmt.Println(strings.Repeat("-", 90))
+
+	for _, profile := range profiles {
+		status := "Ready"
+		if !profile.IsAnalysisReady() {
+			if profile.UserID == "" || profile.ProjectID == "" {
+				status = "Missing IDs"
+			}
+		}
+
+		userID := profile.UserID
+		if userID == "" {
+			userID = "-"
+		}
+		projectID := profile.ProjectID
+		if projectID == "" {
+			projectID = "-"
+		}
+
+		fmt.Printf("%-15s %-35s %-12s %-12s %s\n",
+			profile.Name,
+			profile.Host,
+			userID,
+			projectID,
+			status)
+	}
+
+	fmt.Printf("\nTotal profiles: %d\n", len(profiles))
+}
+
+// handleBacklogList handles Backlog listing functionality for all profiles
+func handleBacklogList(projectID string, forceRefresh bool) {
+	profiles := backlog.LoadBacklogProfiles()
+
+	if len(profiles) == 0 {
+		fmt.Println("No Backlog profiles found.")
+		fmt.Println("Run './bin/dev-stats -list-backlog-profiles' for configuration help.")
+		return
+	}
+
+	// Clear cache if reset is requested
+	if forceRefresh {
+		fmt.Println("🗑️  Clearing cache for all profiles...")
+		for _, profile := range profiles {
+			if err := backlog.ClearCache(profile.Name); err != nil {
+				log.Printf("Warning: Failed to clear cache for profile '%s': %v", profile.Name, err)
+			} else {
+				fmt.Printf("✓ Cache cleared for profile: %s\n", profile.Name)
+			}
+		}
+		fmt.Println()
+	}
+
+	for i, profile := range profiles {
+		if i > 0 {
+			fmt.Println("\n" + strings.Repeat("=", 80) + "\n")
+		}
+
+		fmt.Printf("Profile: %s (%s)\n", profile.Name, profile.GetBaseURL())
+
+		analyzer := backlog.NewBacklogAnalyzerWithProfile(&profile)
+
+		var err error
+		if projectID != "" {
+			// List members of a specific project (no caching for specific project query)
+			err = analyzer.ListProjectMembers(projectID, os.Stdout)
+		} else {
+			// List all projects and their members (with caching)
+			err = analyzer.ListAllProjectsAndMembersWithCache(os.Stdout, forceRefresh)
+		}
+
+		if err != nil {
+			log.Printf("Error listing Backlog resources for profile '%s': %v", profile.Name, err)
+		}
+	}
+}
+
 // handleDownload handles the download functionality
 func handleDownload(markdownFile string) {
 	downloader := notion.NewNotionDownloader()
@@ -183,18 +360,28 @@ func printHelp() {
 	fmt.Println("Usage:")
 	fmt.Println("  dev-stats -analyzer <analyzer_name>")
 	fmt.Println("  dev-stats -download <markdown_file>")
+	fmt.Println("  dev-stats -list-backlog")
+	fmt.Println("  dev-stats -list-backlog-profiles")
 	fmt.Println()
 	fmt.Println("Flags:")
-	fmt.Println("  -analyzer string    Analyzer to run (github,backlog,calendar,notion,all)")
-	fmt.Println("  -download string    Download Notion pages from markdown file")
-	fmt.Println("  -list              List available analyzers")
-	fmt.Println("  -help              Show this help message")
+	fmt.Println("  -analyzer string             Analyzer to run (github,backlog,calendar,notion,all)")
+	fmt.Println("  -download string             Download Notion pages from markdown file")
+	fmt.Println("  -list-backlog                List all Backlog projects and members (all profiles)")
+	fmt.Println("  -list-backlog-project ID     List members of a specific Backlog project (all profiles)")
+	fmt.Println("  -list-backlog-profiles       List all configured Backlog profiles")
+	fmt.Println("  -list-backlog-clear          Clear cache and refresh Backlog data")
+	fmt.Println("  -list                        List available analyzers")
+	fmt.Println("  -help                        Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  dev-stats -analyzer github")
 	fmt.Println("  dev-stats -analyzer github,backlog")
 	fmt.Println("  dev-stats -analyzer all")
 	fmt.Println("  dev-stats -download notion-urls/YYYY-MM-DD_to_YYYY-MM-DD.md")
+	fmt.Println("  dev-stats -list-backlog-profiles")
+	fmt.Println("  dev-stats -list-backlog")
+	fmt.Println("  dev-stats -list-backlog-clear")
+	fmt.Println("  dev-stats -list-backlog-project 1073924896")
 	fmt.Println()
 	fmt.Println("Environment Variables:")
 	fmt.Println("  START_DATE         Start date in YYYY-MM-DD format")
@@ -204,11 +391,24 @@ func printHelp() {
 	fmt.Println("    GITHUB_TOKEN     GitHub personal access token")
 	fmt.Println("    GITHUB_USERNAME  GitHub username")
 	fmt.Println()
-	fmt.Println("  For Backlog:")
-	fmt.Println("    BACKLOG_API_KEY     Backlog API key")
-	fmt.Println("    BACKLOG_SPACE_NAME  Backlog space name (e.g., 'yourspace' for yourspace.backlog.jp)")
-	fmt.Println("    BACKLOG_USER_ID     Backlog user ID")
-	fmt.Println("    BACKLOG_PROJECT_ID  Backlog project ID")
+	fmt.Println("  For Backlog (Multi-Profile Support):")
+	fmt.Println("    Pattern: BACKLOG_<PROFILE>_<SETTING>")
+	fmt.Println()
+	fmt.Println("    BACKLOG_<PROFILE>_API_KEY       Backlog API key")
+	fmt.Println("    BACKLOG_<PROFILE>_HOST          Backlog host (e.g., mycompany.backlog.com)")
+	fmt.Println("    BACKLOG_<PROFILE>_USER_ID       User ID (for analysis)")
+	fmt.Println("    BACKLOG_<PROFILE>_PROJECT_ID    Project ID (for analysis)")
+	fmt.Println()
+	fmt.Println("    Example for multiple profiles:")
+	fmt.Println("      BACKLOG_HOGE_API_KEY=xxx")
+	fmt.Println("      BACKLOG_HOGE_HOST=mycompany.backlog.com")
+	fmt.Println("      BACKLOG_HOGE_USER_ID=123456")
+	fmt.Println("      BACKLOG_HOGE_PROJECT_ID=789012")
+	fmt.Println()
+	fmt.Println("      BACKLOG_FUGA_API_KEY=yyy")
+	fmt.Println("      BACKLOG_FUGA_HOST=projectspace.backlog.jp")
+	fmt.Println("      BACKLOG_FUGA_USER_ID=234567")
+	fmt.Println("      BACKLOG_FUGA_PROJECT_ID=890123")
 	fmt.Println()
 	fmt.Println("  For Calendar:")
 	fmt.Println("    No additional environment variables required")

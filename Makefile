@@ -1,20 +1,29 @@
 # Makefile for dev-stats
 
+# Load environment variables from .env file if it exists
+ifneq (,$(wildcard .env))
+    include .env
+    export
+endif
+
 # Default target
 help:
 	@echo "Available targets:"
-	@echo "  help         - Show this help message"
-	@echo "  install      - Install dependencies"
-	@echo "  build        - Build the unified dev-stats command"
-	@echo "  run-github   - Run GitHub analysis"
-	@echo "  run-backlog  - Run Backlog analysis"
-	@echo "  run-calendar - Run Calendar analysis"
-	@echo "  run-notion   - Run Notion analysis"
-	@echo "  run-all      - Run all analyzers"
-	@echo "  download     - Download Notion pages from markdown"
-	@echo "  fmt          - Format code"
-	@echo "  vet          - Run go vet"
-	@echo "  check        - Run fmt, vet, and test"
+	@echo "  help                  - Show this help message"
+	@echo "  install               - Install dependencies"
+	@echo "  build                 - Build the unified dev-stats command"
+	@echo "  run-github            - Run GitHub analysis"
+	@echo "  run-backlog           - Run Backlog analysis (all profiles)"
+	@echo "  run-calendar          - Run Calendar analysis"
+	@echo "  run-notion            - Run Notion analysis"
+	@echo "  run-all               - Run all analyzers"
+	@echo "  list-backlog-profiles - List all Backlog profiles"
+	@echo "  list-backlog          - List all Backlog projects and members"
+	@echo "  list-backlog-clear    - Clear cache and refresh Backlog data"
+	@echo "  download              - Download Notion pages from markdown"
+	@echo "  fmt                   - Format code"
+	@echo "  vet                   - Run go vet"
+	@echo "  check                 - Run fmt, vet, and test"
 
 # Install dependencies
 install:
@@ -29,7 +38,7 @@ build:
 run-github: build
 	./bin/dev-stats -analyzer github
 
-# Run Backlog analysis
+# Run Backlog analysis (all profiles)
 run-backlog: build
 	./bin/dev-stats -analyzer backlog
 
@@ -44,6 +53,18 @@ run-notion: build
 # Run all analyzers
 run-all: build
 	./bin/dev-stats -analyzer all
+
+# List all Backlog profiles
+list-backlog-profiles: build
+	./bin/dev-stats -list-backlog-profiles
+
+# List Backlog projects and members (all profiles)
+list-backlog: build
+	./bin/dev-stats -list-backlog
+
+# Clear cache and refresh Backlog data
+list-backlog-clear: build
+	./bin/dev-stats -list-backlog-clear
 
 # Download Notion pages
 download: build

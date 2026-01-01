@@ -14,11 +14,8 @@ import (
 
 // BacklogAnalyzer implements the Analyzer interface for Backlog
 type BacklogAnalyzer struct {
-	apiKey    string
-	spaceName string
-	userID    string
-	projectID string
-	client    *common.HTTPClient
+	profile *BacklogProfile
+	client  *common.HTTPClient
 }
 
 // Issue represents a Backlog issue
@@ -66,14 +63,30 @@ type ActivityItem struct {
 	Type    string
 }
 
-// NewBacklogAnalyzer creates a new Backlog analyzer
+// NewBacklogAnalyzer creates a new Backlog analyzer (legacy method for backward compatibility)
 func NewBacklogAnalyzer() *BacklogAnalyzer {
+	// For backward compatibility, check old environment variables first
+	if os.Getenv("BACKLOG_API_KEY") != "" {
+		profile := &BacklogProfile{
+			Name:      "default",
+			APIKey:    os.Getenv("BACKLOG_API_KEY"),
+			Host:      os.Getenv("BACKLOG_HOST"),
+			UserID:    os.Getenv("BACKLOG_USER_ID"),
+			ProjectID: os.Getenv("BACKLOG_PROJECT_ID"),
+		}
+		return &BacklogAnalyzer{
+			profile: profile,
+			client:  common.NewHTTPClient(),
+		}
+	}
+	return nil
+}
+
+// NewBacklogAnalyzerWithProfile creates a new Backlog analyzer with a specific profile
+func NewBacklogAnalyzerWithProfile(profile *BacklogProfile) *BacklogAnalyzer {
 	return &BacklogAnalyzer{
-		apiKey:    os.Getenv("BACKLOG_API_KEY"),
-		spaceName: os.Getenv("BACKLOG_SPACE_NAME"),
-		userID:    os.Getenv("BACKLOG_USER_ID"),
-		projectID: os.Getenv("BACKLOG_PROJECT_ID"),
-		client:    common.NewHTTPClient(),
+		profile: profile,
+		client:  common.NewHTTPClient(),
 	}
 }
 
@@ -84,34 +97,35 @@ func (b *BacklogAnalyzer) GetName() string {
 
 // ValidateConfig validates the required configuration
 func (b *BacklogAnalyzer) ValidateConfig(writer io.Writer) error {
-	if b.apiKey == "" {
+	if b.profile.APIKey == "" {
 		return common.NewError("BACKLOG_API_KEY environment variable is required")
 	}
-	if b.spaceName == "" {
-		return common.NewError("BACKLOG_SPACE_NAME environment variable is required")
+	if b.profile.Host == "" {
+		return common.NewError("BACKLOG_HOST environment variable is required")
 	}
-	if b.userID == "" {
+	if b.profile.UserID == "" {
 		return common.NewError("BACKLOG_USER_ID environment variable is required")
 	}
-	if b.projectID == "" {
+	if b.profile.ProjectID == "" {
 		return common.NewError("BACKLOG_PROJECT_ID environment variable is required")
 	}
 
 	// Test API connectivity with helpful error messages
-	fmt.Fprintf(writer, "Testing Backlog API connection to: https://%s.backlog.com\n", b.spaceName)
-	testURL := fmt.Sprintf("https://%s.backlog.com/api/v2/space", b.spaceName)
+	baseURL := b.profile.GetBaseURL()
+	fmt.Fprintf(writer, "Testing Backlog API connection to: %s\n", baseURL)
+	testURL := fmt.Sprintf("%s/api/v2/space", baseURL)
 	params := url.Values{}
-	params.Set("apiKey", b.apiKey)
+	params.Set("apiKey", b.profile.APIKey)
 	fullURL := fmt.Sprintf("%s?%s", testURL, params.Encode())
 
 	_, err := b.client.Get(fullURL, nil)
 	if err != nil {
 		return common.WrapError(err, "Failed to connect to Backlog API.\n"+
 			"Please verify:\n"+
-			"1. BACKLOG_SPACE_NAME is correct (current: %s)\n"+
+			"1. BACKLOG_HOST is correct (current: %s)\n"+
 			"2. BACKLOG_API_KEY is valid\n"+
-			"3. Your Backlog URL should be: https://%s.backlog.com\n"+
-			"4. API key has proper permissions", b.spaceName, b.spaceName)
+			"3. Your Backlog URL should be: %s\n"+
+			"4. API key has proper permissions", b.profile.Host, baseURL)
 	}
 	fmt.Fprintf(writer, "✓ Backlog API connection successful\n")
 
@@ -124,8 +138,8 @@ func (b *BacklogAnalyzer) Analyze(config *common.Config, writer io.Writer) (*com
 		return nil, err
 	}
 
-	fmt.Fprintf(writer, "Analyzing Backlog activity for user ID: %s\n", b.userID)
-	fmt.Fprintf(writer, "Space: %s, Project ID: %s\n", b.spaceName, b.projectID)
+	fmt.Fprintf(writer, "Analyzing Backlog activity for user ID: %s\n", b.profile.UserID)
+	fmt.Fprintf(writer, "Host: %s, Project ID: %s\n", b.profile.Host, b.profile.ProjectID)
 	fmt.Fprintf(writer, "Date range: %s to %s\n", config.StartDate.Format("2006-01-02"), config.EndDate.Format("2006-01-02"))
 
 	// Get issues created by user
@@ -188,14 +202,14 @@ func (b *BacklogAnalyzer) Analyze(config *common.Config, writer io.Writer) (*com
 
 func (b *BacklogAnalyzer) getIssuesCreatedByUser(startDate, endDate time.Time) ([]Issue, error) {
 	params := url.Values{}
-	params.Set("apiKey", b.apiKey)
-	params.Set("projectId[]", b.projectID)
-	params.Set("createdUserId[]", b.userID)
+	params.Set("apiKey", b.profile.APIKey)
+	params.Set("projectId[]", b.profile.ProjectID)
+	params.Set("createdUserId[]", b.profile.UserID)
 	params.Set("createdSince", startDate.Format("2006-01-02"))
 	params.Set("createdUntil", endDate.Format("2006-01-02"))
 	params.Set("count", "100")
 
-	apiURL := fmt.Sprintf("https://%s.backlog.com/api/v2/issues?%s", b.spaceName, params.Encode())
+	apiURL := fmt.Sprintf("%s/api/v2/issues?%s", b.profile.GetBaseURL(), params.Encode())
 
 	body, err := b.client.Get(apiURL, nil)
 	if err != nil {
@@ -212,14 +226,14 @@ func (b *BacklogAnalyzer) getIssuesCreatedByUser(startDate, endDate time.Time) (
 
 func (b *BacklogAnalyzer) getIssuesAssignedToUser(startDate, endDate time.Time) ([]Issue, error) {
 	params := url.Values{}
-	params.Set("apiKey", b.apiKey)
-	params.Set("projectId[]", b.projectID)
-	params.Set("assigneeId[]", b.userID)
+	params.Set("apiKey", b.profile.APIKey)
+	params.Set("projectId[]", b.profile.ProjectID)
+	params.Set("assigneeId[]", b.profile.UserID)
 	params.Set("createdSince", startDate.Format("2006-01-02"))
 	params.Set("createdUntil", endDate.Format("2006-01-02"))
 	params.Set("count", "100")
 
-	apiURL := fmt.Sprintf("https://%s.backlog.com/api/v2/issues?%s", b.spaceName, params.Encode())
+	apiURL := fmt.Sprintf("%s/api/v2/issues?%s", b.profile.GetBaseURL(), params.Encode())
 
 	body, err := b.client.Get(apiURL, nil)
 	if err != nil {
@@ -238,19 +252,19 @@ func (b *BacklogAnalyzer) getUserActivities(startDate, endDate time.Time) ([]Act
 	var allActivities []Activity
 	maxId := ""
 
-	userIDInt, _ := strconv.Atoi(b.userID)
+	userIDInt, _ := strconv.Atoi(b.profile.UserID)
 	requestCount := 0
 
 	for {
 		requestCount++
 		params := url.Values{}
-		params.Set("apiKey", b.apiKey)
+		params.Set("apiKey", b.profile.APIKey)
 		params.Set("count", "100")
 		if maxId != "" {
 			params.Set("maxId", maxId)
 		}
 
-		apiURL := fmt.Sprintf("https://%s.backlog.com/api/v2/users/%d/activities?%s", b.spaceName, userIDInt, params.Encode())
+		apiURL := fmt.Sprintf("%s/api/v2/users/%d/activities?%s", b.profile.GetBaseURL(), userIDInt, params.Encode())
 
 		body, err := b.client.Get(apiURL, nil)
 		if err != nil {

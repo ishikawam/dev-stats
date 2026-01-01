@@ -98,11 +98,17 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
 ### Calendar
 
 1. **Set up ICS files**:
-    - Place your calendar ICS files in the `storage/calendar/` directory:
-      ```bash
-      mkdir -p storage/calendar
-      # Copy your .ics files to storage/calendar/
-      ```
+    - Export your calendar from Google Calendar:
+      1. Open Google Calendar settings (⚙️ → Settings)
+      2. Go to "Import & Export"
+      3. Click "Export" to download all calendars as a ZIP file
+      4. Extract the ZIP and copy your `.ics` file to `storage/calendar/` directory
+    - Or use the secret iCal URL:
+      1. Open Google Calendar
+      2. Click "..." next to your calendar → "Settings and sharing"
+      3. Scroll to "Integrate calendar" section
+      4. Copy "Secret address in iCal format" URL
+      5. Download the ICS file from that URL and save to `storage/calendar/`
 
 2. **Set up your environment variables**:
     - Update the `.env` file in the project root directory:

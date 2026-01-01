@@ -266,7 +266,8 @@ func (c *CalendarAnalyzer) parseDateTime(dtStr string) (time.Time, error) {
 func (c *CalendarAnalyzer) filterEventsByDateRange(events []Event, startDate, endDate time.Time) []Event {
 	var filtered []Event
 	for _, event := range events {
-		if !event.Start.IsZero() && event.Start.After(startDate) && event.Start.Before(endDate.AddDate(0, 0, 1)) {
+		// Include events on or after startDate and before or on endDate
+		if !event.Start.IsZero() && !event.Start.Before(startDate) && event.Start.Before(endDate.AddDate(0, 0, 1)) {
 			filtered = append(filtered, event)
 		}
 	}

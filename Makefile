@@ -20,7 +20,7 @@ help:
 	@echo "  list-backlog-profiles - List all Backlog profiles"
 	@echo "  list-backlog          - List all Backlog projects and members"
 	@echo "  list-backlog-clear    - Clear cache and refresh Backlog data"
-	@echo "  download              - Download Notion pages from markdown"
+	@echo "  download-notion       - Download Notion pages from markdown"
 	@echo "  fmt                   - Format code"
 	@echo "  vet                   - Run go vet"
 	@echo "  check                 - Run fmt, vet, and test"
@@ -67,8 +67,16 @@ list-backlog-clear: build
 	./bin/dev-stats -list-backlog-clear
 
 # Download Notion pages
-download: build
-	set -a && source .env && set +a && ./bin/dev-stats -download notion-urls/$${START_DATE}_to_$${END_DATE}.md
+download-notion: build
+	@set -a && source .env && set +a && \
+	MARKDOWN_FILE="notion-urls/$${START_DATE}_to_$${END_DATE}.md" && \
+	if [ ! -f "$$MARKDOWN_FILE" ]; then \
+		echo "Creating $$MARKDOWN_FILE from template..." && \
+		cp notion-urls/.sample.md "$$MARKDOWN_FILE" && \
+		sed -i '' "s/[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\} to [0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}/$${START_DATE} to $${END_DATE}/" "$$MARKDOWN_FILE" && \
+		echo "Created empty template for $${START_DATE} to $${END_DATE}. Please add Notion page URLs before running again."; \
+	fi && \
+	./bin/dev-stats -download "$$MARKDOWN_FILE"
 
 # Format code
 fmt:

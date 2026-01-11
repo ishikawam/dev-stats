@@ -4,6 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## ⚠️ IMPORTANT RULES
 
+**GIT COMMIT POLICY**
+- **ALWAYS write commit messages in English** - This is an open source project with English documentation
+- Use conventional commit format: `type: description` (e.g., `feat:`, `fix:`, `refactor:`, `docs:`)
+
 **NEVER COMMIT CODE WITHOUT EXPLICIT USER REQUEST**
 - Do NOT run `git commit` unless the user explicitly asks to commit
 - Do NOT run `git add` and `git commit` automatically

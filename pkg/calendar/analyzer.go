@@ -391,27 +391,6 @@ func (c *CalendarAnalyzer) calculateAllDayStats(groupedEvents map[string][]Event
 }
 
 func (c *CalendarAnalyzer) printResults(writer io.Writer, result *common.AnalysisResult, events []Event, titleStats, allDayStats []TitleStats, categoryStats *EventCategoryStats, workingHoursStats *WorkingHoursStats) {
-	fmt.Fprintf(writer, "\nCalendar events from %s to %s:\n",
-		result.StartDate.Format("2006-01-02"),
-		result.EndDate.Format("2006-01-02"))
-
-	for _, event := range events {
-		duration := ""
-		if c.isAllDayEvent(event) {
-			duration = " (-)"
-		} else if !event.Start.IsZero() && !event.End.IsZero() {
-			d := event.End.Sub(event.Start)
-			hours := int(d.Hours())
-			minutes := int(d.Minutes()) % 60
-			if hours > 0 {
-				duration = fmt.Sprintf(" (%dh%dm)", hours, minutes)
-			} else {
-				duration = fmt.Sprintf(" (%dm)", minutes)
-			}
-		}
-		fmt.Fprintf(writer, "- %s: %s%s\n", event.Start.Format("2006-01-02 15:04"), event.Summary, duration)
-	}
-
 	result.PrintSummary(writer)
 
 	// Print title statistics

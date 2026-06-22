@@ -87,7 +87,7 @@ func (d *NotionDownloader) LoadFromMarkdown(markdownPath string) (*DownloadConfi
 		trimmedLine := strings.TrimSpace(line)
 
 		// Extract date range from title
-		if strings.Contains(trimmedLine, "to") && strings.Contains(trimmedLine, "2025") {
+		if strings.Contains(trimmedLine, "to") {
 			dateRegex := regexp.MustCompile(`(\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})`)
 			if matches := dateRegex.FindStringSubmatch(trimmedLine); len(matches) == 3 {
 				config.StartDate = matches[1]
@@ -113,7 +113,7 @@ func (d *NotionDownloader) LoadFromMarkdown(markdownPath string) (*DownloadConfi
 		}
 
 		// Extract URL (    - https://...)
-		if strings.HasPrefix(line, "    - https://www.notion.so/") && currentCategory != nil && currentTitle != "" {
+		if strings.HasPrefix(line, "    - https://") && strings.Contains(line, "notion") && currentCategory != nil && currentTitle != "" {
 			url := strings.TrimPrefix(line, "    - ")
 			pageID := d.extractPageIDFromURL(url)
 

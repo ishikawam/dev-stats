@@ -159,6 +159,32 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
     - The results include pages you created and updated, with URLs and timestamps
     - Includes timekeeper entries and categorized work analysis
 
+### Notion Page Download
+
+You can download specific Notion pages (e.g., 1on1 notes, MBO memos) as markdown files.
+
+**Setup for each period:**
+
+1. **Edit `notion-urls/YYYY-MM-DD_to_YYYY-MM-DD.md`**:
+   - The file matching `START_DATE_to_END_DATE` is used automatically
+   - Add newly created pages that are not in the previous period file
+   - Remove pages that are no longer relevant
+
+   Format:
+   ```markdown
+   # Notion Pages to Download (YYYY-MM-DD to YYYY-MM-DD)
+
+   ## Category Name
+   - Page Title
+       - https://www.notion.so/page-url
+   ```
+
+2. **Download pages**:
+   ```bash
+   make download-notion
+   ```
+   Pages are saved to `notion-downloads/YYYY-MM-DD_to_YYYY-MM-DD/<Category Name>/<Page Title>.md`
+
 ## Unified Command Usage
 
 The project has been refactored to provide a unified command interface. You can now run any analyzer using the `dev-stats` command:
@@ -327,6 +353,8 @@ make run-calendar
 make run-notion
 make run-all        # Run all analyzers
 
+# Notion page download
+make download-notion       # Download pages listed in notion-urls/
 
 # Code quality checks
 make fmt        # Format code

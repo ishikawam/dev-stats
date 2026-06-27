@@ -97,34 +97,38 @@ A tool to analyze your GitHub, Backlog, Calendar, Notion, and Google Workspace p
 
 ### Calendar
 
-1. **Set up ICS files**:
-    - Export your calendar from Google Calendar:
-      1. Open Google Calendar settings (⚙️ → Settings)
-      2. Go to "Import & Export"
-      3. Click "Export" to download all calendars as a ZIP file
-      4. Extract the ZIP and copy your `.ics` file to `storage/calendar/` directory
-    - Or use the secret iCal URL:
-      1. Open Google Calendar
-      2. Click "..." next to your calendar → "Settings and sharing"
-      3. Scroll to "Integrate calendar" section
-      4. Copy "Secret address in iCal format" URL
-      5. Download the ICS file from that URL and save to `storage/calendar/`
+Two sources are supported and can be used together (merged with UID-based deduplication).
 
-2. **Set up your environment variables**:
-    - Update the `.env` file in the project root directory:
-      ```plaintext
-      # YYYY-MM-DD format
-      START_DATE=2024-01-01
-      END_DATE=2024-06-30
-      ```
+**Option A: ICS file (offline export)**
 
-3. **Run the tool**:
+1. Export your calendar from Google Calendar:
+   1. Open Google Calendar settings (⚙️ → Settings → Import & Export)
+   2. Click "Export" to download all calendars as a ZIP file
+   3. Extract the ZIP and copy your `.ics` file to `storage/calendar/` directory
+2. Run the tool:
    ```bash
    make run-calendar
    ```
 
-4. **View the output**:
-    - The results include detailed event listings, event count rankings, duration rankings, and all-day event rankings.
+**Option B: Google Calendar API (live fetch)**
+
+Fetches events from your primary calendar using the same OAuth2 credentials as Google Workspace.
+
+1. Set up OAuth2 credentials (see [Google Workspace](#google-workspace) section).
+   - Additionally enable the **Google Calendar API** in GCP Console.
+2. Set up your environment variables:
+   ```plaintext
+   GOOGLE_CLIENT_ID=your-oauth2-client-id
+   GOOGLE_CLIENT_SECRET=your-oauth2-client-secret
+   ```
+3. Run the tool:
+   ```bash
+   make run-calendar
+   ```
+   On the first run, a browser window opens for OAuth2 authentication.
+
+**View the output**:
+- The results include event count rankings, duration rankings, and all-day event rankings.
 
 ### Notion
 
@@ -431,9 +435,9 @@ make check      # Run all checks (fmt, vet)
     - Copy the Integration Token
     - Share your workspace pages with the integration
     - Optionally specify `NOTION_USER_ID` to filter pages for a specific user
-- **Google OAuth2 Credentials** (for Google Workspace analysis):
+- **Google OAuth2 Credentials** (for Google Workspace and/or Google Calendar analysis):
     - Create OAuth2 credentials at [GCP Console](https://console.cloud.google.com/apis/credentials) (Application type: Desktop app)
-    - Enable the Google Drive API
+    - Enable the Google Drive API (for Workspace) and/or Google Calendar API (for Calendar)
     - The token is cached in `storage/google_token.json` after the first authentication
 
 ## Notes

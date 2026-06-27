@@ -12,6 +12,7 @@ import (
 
 	"dev-stats/pkg/common"
 	"dev-stats/pkg/config"
+	googlecal "dev-stats/pkg/google"
 )
 
 // CalendarAnalyzer implements the Analyzer interface for Calendar
@@ -83,10 +84,16 @@ func (c *CalendarAnalyzer) GetName() string {
 	return "Calendar"
 }
 
-// ValidateConfig validates the required configuration
+// ValidateConfig validates the required configuration.
+// Passes if either storage/calendar/ exists or GOOGLE_CLIENT_ID is set.
 func (c *CalendarAnalyzer) ValidateConfig() error {
-	if _, err := os.Stat(c.calendarDir); os.IsNotExist(err) {
-		return common.NewError("Calendar directory '%s' does not exist", c.calendarDir)
+	hasICS := false
+	if _, err := os.Stat(c.calendarDir); err == nil {
+		hasICS = true
+	}
+	hasAPI := os.Getenv("GOOGLE_CLIENT_ID") != ""
+	if !hasICS && !hasAPI {
+		return common.NewError("no calendar source: set GOOGLE_CLIENT_ID or place ICS files in '%s'", c.calendarDir)
 	}
 	return nil
 }
@@ -97,12 +104,44 @@ func (c *CalendarAnalyzer) Analyze(config *common.Config, writer io.Writer) (*co
 		return nil, err
 	}
 
-	fmt.Fprintf(writer, "Analyzing calendar events from directory: %s\n", c.calendarDir)
+	// Collect events from ICS files and/or Google Calendar API
+	seen := make(map[string]bool)
+	var allEvents []Event
 
-	// Read all ICS files
-	allEvents, err := c.readAllICSFiles(writer)
-	if err != nil {
-		return nil, common.WrapError(err, "failed to read ICS files")
+	if _, err := os.Stat(c.calendarDir); err == nil {
+		fmt.Fprintf(writer, "Analyzing calendar events from directory: %s\n", c.calendarDir)
+		icsEvents, err := c.readAllICSFiles(writer)
+		if err != nil {
+			return nil, common.WrapError(err, "failed to read ICS files")
+		}
+		for _, e := range icsEvents {
+			allEvents = append(allEvents, e)
+			if e.UID != "" {
+				seen[e.UID] = true
+			}
+		}
+	}
+
+	if os.Getenv("GOOGLE_CLIENT_ID") != "" {
+		fmt.Fprintln(writer, "Fetching events from Google Calendar API...")
+		apiEvents, err := googlecal.FetchCalendarEvents(config.StartDate, config.EndDate, writer)
+		if err != nil {
+			fmt.Fprintf(writer, "Warning: failed to fetch from Google Calendar API: %v\n", err)
+		} else {
+			for _, ae := range apiEvents {
+				if seen[ae.ID] {
+					continue
+				}
+				seen[ae.ID] = true
+				allEvents = append(allEvents, Event{
+					UID:      ae.ID,
+					Summary:  ae.Summary,
+					Start:    ae.Start,
+					End:      ae.End,
+					IsAllDay: ae.IsAllDay,
+				})
+			}
+		}
 	}
 
 	// Filter events by date range

@@ -12,6 +12,7 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
@@ -25,6 +26,7 @@ func newOAuth2Config(redirectURL string) *oauth2.Config {
 		RedirectURL:  redirectURL,
 		Scopes: []string{
 			drive.DriveReadonlyScope,
+			calendar.CalendarReadonlyScope,
 		},
 		Endpoint: google.Endpoint,
 	}

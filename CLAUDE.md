@@ -42,6 +42,7 @@ The project uses a unified architecture with:
 - `pkg/calendar/analyzer.go` - Calendar analysis implementation
 - `pkg/notion/analyzer.go` - Notion analysis implementation
 - `pkg/google/analyzer.go` - Google Workspace analysis implementation (Docs/Slides/Sheets)
+- `pkg/google/calendar.go` - Google Calendar API integration (fetches primary calendar events)
 
 All analyzers implement the common `Analyzer` interface with methods:
 - `GetName()` - Returns analyzer name
@@ -75,6 +76,7 @@ The application requires environment variables to be set in a `.env` file. Use `
 
 **Calendar analysis:**
 - ICS files should be placed in `storage/calendar/` directory
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - (Optional) OAuth2 credentials for Google Calendar API (primary calendar only). Uses the same credentials as Google Workspace analysis. Enable Google Calendar API in GCP Console.
 
 **Notion analysis:**
 - `NOTION_TOKEN` - Notion integration token with content read access
@@ -148,6 +150,8 @@ make check  # Run all checks
 
 **Calendar Analysis Integration:**
 - Parses ICS (iCalendar) files from `storage/calendar/` directory
+- Also fetches live events from Google Calendar API (primary calendar only) when `GOOGLE_CLIENT_ID` is set
+- Both sources are merged with UID-based deduplication
 - Supports multiple datetime formats: UTC (`YYYYMMDDTHHMMSSZ`), timezone-aware (`DTSTART;TZID=Asia/Tokyo`), and date-only (`VALUE=DATE`)
 - Detects all-day events using both `VALUE=DATE` format and duration-based heuristics (24-hour or multiples)
 - Provides three ranking systems: event count, duration (excluding all-day), and all-day event days

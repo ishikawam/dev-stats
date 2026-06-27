@@ -92,6 +92,9 @@ The application requires environment variables to be set in a `.env` file. Use `
 **All analyzers:**
 - `START_DATE` / `END_DATE` - Date range in YYYY-MM-DD format
 
+**END_DATE enforcement:**
+The tool refuses to run `run-*` and `download-google` if today is past `END_DATE`. This prevents incomplete stats: APIs filter by last-modified time, so a file active during the period but updated after `END_DATE` would be excluded from results. The check is implemented in `cmd/dev-stats/main.go`.
+
 ## Common Commands
 
 **Install dependencies:**

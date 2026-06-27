@@ -78,6 +78,15 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Refuse to run if today is past END_DATE: results would be incomplete
+	// because APIs filter by last_edited_time, so pages updated after END_DATE
+	// would be excluded even if they were active during the target period.
+	if time.Now().After(config.EndDate.AddDate(0, 0, 1)) {
+		log.Fatalf("Error: today (%s) is past END_DATE (%s). Running now would produce incomplete stats because active files updated after END_DATE would be excluded. Update END_DATE in .env before running.",
+			time.Now().Format("2006-01-02"),
+			config.EndDate.Format("2006-01-02"))
+	}
+
 	// Create analyzers
 	analyzers := make(map[string]common.Analyzer)
 
@@ -347,6 +356,12 @@ func handleDownloadGoogle() {
 	config, err := common.LoadConfig()
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	if time.Now().After(config.EndDate.AddDate(0, 0, 1)) {
+		log.Fatalf("Error: today (%s) is past END_DATE (%s). Running now would produce incomplete results. Update END_DATE in .env before running.",
+			time.Now().Format("2006-01-02"),
+			config.EndDate.Format("2006-01-02"))
 	}
 
 	d := google.NewGDocsDownloader()

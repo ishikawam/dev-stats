@@ -443,6 +443,7 @@ make check      # Run all checks (fmt, vet)
 ## Notes
 
 - **Custom Date Range**: Specify the `START_DATE` and `END_DATE` in the `.env` file or environment variables to fetch data for a specific period.
+- **END_DATE must not be in the past**: The tool refuses to run if today's date is past `END_DATE`. This is intentional — APIs filter results by last-modified time, so files that were active during the target period but updated after `END_DATE` would be silently excluded, producing incomplete stats. Always run the analysis before `END_DATE` passes.
 - **Output Details**:
     - GitHub: PRs you were involved in as an author or reviewer, summary of PR counts per organization and repository.
     - Backlog: Activity count by type, unique issues involved, and summaries.

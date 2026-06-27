@@ -36,10 +36,10 @@ type ProjectWithMembers struct {
 
 // ProfileCache represents cached data for a profile
 type ProfileCache struct {
-	Profile  string                `json:"profile"`
-	Host     string                `json:"host"`
-	CachedAt time.Time             `json:"cached_at"`
-	Projects []ProjectWithMembers  `json:"projects"`
+	Profile  string               `json:"profile"`
+	Host     string               `json:"host"`
+	CachedAt time.Time            `json:"cached_at"`
+	Projects []ProjectWithMembers `json:"projects"`
 }
 
 // ListProjects lists all projects in the Backlog space

@@ -16,11 +16,13 @@ help:
 	@echo "  run-backlog           - Run Backlog analysis (all profiles)"
 	@echo "  run-calendar          - Run Calendar analysis"
 	@echo "  run-notion            - Run Notion analysis"
+	@echo "  run-google            - Run Google Workspace analysis"
 	@echo "  run-all               - Run all analyzers"
 	@echo "  list-backlog-profiles - List all Backlog profiles"
 	@echo "  list-backlog          - List all Backlog projects and members"
 	@echo "  list-backlog-clear    - Clear cache and refresh Backlog data"
 	@echo "  download-notion       - Download Notion pages from markdown"
+	@echo "  download-google       - Download Google Workspace files modified in date range"
 	@echo "  fmt                   - Format code"
 	@echo "  vet                   - Run go vet"
 	@echo "  check                 - Run fmt, vet, and test"
@@ -50,6 +52,10 @@ run-calendar: build
 run-notion: build
 	./bin/dev-stats -analyzer notion
 
+# Run Google Workspace analysis
+run-google: build
+	./bin/dev-stats -analyzer google
+
 # Run all analyzers
 run-all: build
 	./bin/dev-stats -analyzer all
@@ -65,6 +71,10 @@ list-backlog: build
 # Clear cache and refresh Backlog data
 list-backlog-clear: build
 	./bin/dev-stats -list-backlog-clear
+
+# Download Google Workspace files
+download-google: build
+	./bin/dev-stats -download-google
 
 # Download Notion pages
 download-notion: build

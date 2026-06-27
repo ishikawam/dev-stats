@@ -3,7 +3,7 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/ishikawam/dev-stats)](https://goreportcard.com/report/github.com/ishikawam/dev-stats)
 
-A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fetching and summarizing activity data within a specified date range.
+A tool to analyze your GitHub, Backlog, Calendar, Notion, and Google Workspace productivity by fetching and summarizing activity data within a specified date range.
 
 ## Usage
 
@@ -93,7 +93,7 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
 
 3. **View the output**:
     - Results for each profile will be displayed separately in your terminal
-    - Output files are saved to `stats/YYYY-MM-DD_to_YYYY-MM-DD/backlog-<profile>-stats.txt`
+    - Output files are saved to `output/YYYY-MM-DD_to_YYYY-MM-DD/stats/backlog-<profile>-stats.txt`
 
 ### Calendar
 
@@ -159,6 +159,50 @@ A tool to analyze your GitHub, Backlog, Calendar, and Notion productivity by fet
     - The results include pages you created and updated, with URLs and timestamps
     - Includes timekeeper entries and categorized work analysis
 
+### Google Workspace
+
+Analyzes Google Docs, Slides, and Sheets you created, updated, or are related to.
+
+1. **Create OAuth2 credentials**:
+   - Go to [GCP Console](https://console.cloud.google.com/apis/credentials)
+   - Create an OAuth2 client ID (Application type: Desktop app)
+   - Enable the Google Drive API
+
+2. **Set up your environment variables**:
+   ```plaintext
+   GOOGLE_CLIENT_ID=your-oauth2-client-id
+   GOOGLE_CLIENT_SECRET=your-oauth2-client-secret
+
+   # Optional: comma-separated keywords to identify related files by title
+   # GOOGLE_DOCS_RELATED_NAMES=YourName,TeamName,ProjectName
+
+   # Optional: check revision history of excluded files (slower, adds ~200ms per file)
+   # GOOGLE_DOCS_CHECK_REVISIONS=true
+   ```
+
+3. **Run the analysis**:
+   ```bash
+   make run-google
+   ```
+   On the first run, a browser window opens for OAuth2 authentication. The token is cached in `storage/google_token.json`.
+
+4. **Download files**:
+   ```bash
+   make download-google
+   ```
+   Files are saved to `output/YYYY-MM-DD_to_YYYY-MM-DD/google/`:
+   - `docs/` — Google Docs exported as Markdown
+   - `slides/` — Google Slides exported as Markdown (plain text)
+   - `sheets/` — Google Sheets exported as CSV
+
+   Files already downloaded are skipped based on modification time.
+
+**File categorization**:
+- **created**: Files you own, created within the date range
+- **updated**: Files where you are the last modifier
+- **related**: Files matching `GOOGLE_DOCS_RELATED_NAMES` keywords in the title
+- **revision**: Files in the excluded list where you appear in revision history (requires `GOOGLE_DOCS_CHECK_REVISIONS=true`)
+
 ### Notion Page Download
 
 You can download specific Notion pages (e.g., 1on1 notes, MBO memos) as markdown files.
@@ -183,7 +227,7 @@ You can download specific Notion pages (e.g., 1on1 notes, MBO memos) as markdown
    ```bash
    make download-notion
    ```
-   Pages are saved to `notion-downloads/YYYY-MM-DD_to_YYYY-MM-DD/<Category Name>/<Page Title>.md`
+   Pages are saved to `output/YYYY-MM-DD_to_YYYY-MM-DD/notion/<Category Name>/<Page Title>.md`
 
 ## Unified Command Usage
 
@@ -194,20 +238,21 @@ The project has been refactored to provide a unified command interface. You can 
 make build
 
 # Run individual analyzers
-./dev-stats -analyzer github
-./dev-stats -analyzer backlog
-./dev-stats -analyzer calendar
-./dev-stats -analyzer notion
+./bin/dev-stats -analyzer github
+./bin/dev-stats -analyzer backlog
+./bin/dev-stats -analyzer calendar
+./bin/dev-stats -analyzer notion
+./bin/dev-stats -analyzer google
 
 # Run multiple analyzers
-./dev-stats -analyzer github,backlog
+./bin/dev-stats -analyzer github,backlog
 
 # Run all analyzers
-./dev-stats -analyzer all
+./bin/dev-stats -analyzer all
 
 # Show help and available options
-./dev-stats -help
-./dev-stats -list
+./bin/dev-stats -help
+./bin/dev-stats -list
 ```
 
 ## Example `.env` File
@@ -235,6 +280,12 @@ BACKLOG_FUGA_PROJECT_ID=890123
 NOTION_TOKEN=your-notion-integration-token
 # Optional: Specific user ID to filter pages by
 NOTION_USER_ID=your-notion-user-id
+
+# Google Workspace (Docs/Slides/Sheets)
+GOOGLE_CLIENT_ID=your-oauth2-client-id
+GOOGLE_CLIENT_SECRET=your-oauth2-client-secret
+# GOOGLE_DOCS_RELATED_NAMES=YourName,TeamName,ProjectName
+# GOOGLE_DOCS_CHECK_REVISIONS=true
 
 # Calendar analysis requires START_DATE and END_DATE for filtering events
 
@@ -351,10 +402,12 @@ make run-github
 make run-backlog
 make run-calendar
 make run-notion
+make run-google     # Google Workspace (Docs/Slides/Sheets)
 make run-all        # Run all analyzers
 
-# Notion page download
-make download-notion       # Download pages listed in notion-urls/
+# Download files
+make download-notion       # Download Notion pages listed in notion-urls/
+make download-google       # Download Google Workspace files
 
 # Code quality checks
 make fmt        # Format code
@@ -378,6 +431,10 @@ make check      # Run all checks (fmt, vet)
     - Copy the Integration Token
     - Share your workspace pages with the integration
     - Optionally specify `NOTION_USER_ID` to filter pages for a specific user
+- **Google OAuth2 Credentials** (for Google Workspace analysis):
+    - Create OAuth2 credentials at [GCP Console](https://console.cloud.google.com/apis/credentials) (Application type: Desktop app)
+    - Enable the Google Drive API
+    - The token is cached in `storage/google_token.json` after the first authentication
 
 ## Notes
 
@@ -387,4 +444,5 @@ make check      # Run all checks (fmt, vet)
     - Backlog: Activity count by type, unique issues involved, and summaries.
     - Calendar: Event listings with duration indicators, rankings by count/duration/days, all-day event detection.
     - Notion: Pages you created or updated, with URLs and activity timestamps, including timekeeper entries and work category analysis.
+    - Google Workspace: Docs/Slides/Sheets categorized by your involvement (created/updated/related/revision history), downloaded to `output/YYYY-MM-DD_to_YYYY-MM-DD/google/`.
 - **Architecture**: The project uses a unified architecture with common libraries and interfaces, making it easy to extend with new analyzers.

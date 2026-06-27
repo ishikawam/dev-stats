@@ -2,3 +2,19 @@
 /.claude/settings.local.json
 /bin/dev-stats
 /.backlog-cache/
+
+# Output data (contains private data)
+/output/
+
+# Notion URL lists (private data, except sample template)
+/notion-urls/*
+!/notion-urls/.sample.md
+
+# Google OAuth2 token
+/storage/google_token.json
+
+# Calendar data (contains private data)
+/storage/calendar/
+
+# OS
+.DS_Store

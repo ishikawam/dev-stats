@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **PRIVACY AND SECURITY RULES**
 - NEVER delete or modify files that are NOT tracked by git (use `git ls-files` to check)
 - Personal `.env` files contain private tokens and credentials - do NOT modify them unless explicitly asked
-- Files in `notion-downloads/` and user-created files in `notion-urls/` contain private data
+- Files in `output/` and user-created files in `notion-urls/` contain private data
 - Only modify tracked template files like `.env.example` and `.sample.md`
 - When working with private data, always distinguish between:
   - Git-tracked files (safe to modify for open source)
@@ -28,88 +28,102 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Go-based tool that analyzes GitHub, Backlog, Calendar, and Notion productivity by fetching and summarizing activity data within specified date ranges. The tool provides statistics on pull requests, issues, activities, calendar events, and Notion pages across different repositories, organizations, and time periods.
+A Go-based tool that analyzes GitHub, Backlog, Calendar, Notion, and Google Workspace productivity by fetching and summarizing activity data within specified date ranges. The tool provides statistics on pull requests, issues, activities, calendar events, Notion pages, and Google Workspace files across different repositories, organizations, and time periods.
 
 ## Architecture
 
-The project has been refactored to use a unified architecture with:
+The project uses a unified architecture with:
 
 **Unified Command Structure:**
 - `cmd/dev-stats/main.go` - Main unified command that can run any analyzer
 - `pkg/common/` - Shared libraries (HTTP client, config, error handling, analyzer interface)
 - `pkg/github/analyzer.go` - GitHub analysis implementation
-- `pkg/backlog/analyzer.go` - Backlog analysis implementation  
+- `pkg/backlog/analyzer.go` - Backlog analysis implementation
 - `pkg/calendar/analyzer.go` - Calendar analysis implementation
 - `pkg/notion/analyzer.go` - Notion analysis implementation
-
+- `pkg/google/analyzer.go` - Google Workspace analysis implementation (Docs/Slides/Sheets)
 
 All analyzers implement the common `Analyzer` interface with methods:
 - `GetName()` - Returns analyzer name
 - `Analyze(config)` - Performs analysis and returns results
 - `ValidateConfig()` - Validates required configuration
 
+## Output Directory Structure
+
+All output is written under `output/YYYY-MM-DD_to_YYYY-MM-DD/`:
+- `stats/` - Analysis result text files (run-*)
+- `notion/` - Downloaded Notion pages
+- `google/` - Downloaded Google Workspace files
+  - `docs/` - Google Docs as Markdown
+  - `slides/` - Google Slides as Markdown (plain text)
+  - `sheets/` - Google Sheets as CSV
+  - `.cache/` - Revision check cache
+
 ## Environment Setup
 
-The application requires environment variables to be set in a `.env` file:
+The application requires environment variables to be set in a `.env` file. Use `.env.example` as a template.
 
 **GitHub analysis:**
 - `GITHUB_TOKEN` - Personal access token with `repo` and `read:org` scopes
 - `GITHUB_USERNAME` - GitHub username to analyze
-- `START_DATE` / `END_DATE` - Date range in YYYY-MM-DD format
 
 **Backlog analysis:**
-- `BACKLOG_API_KEY` - API key from Backlog space settings
-- `BACKLOG_SPACE_NAME` - Backlog space name
-- `BACKLOG_USER_ID` - User ID (integer)
-- `BACKLOG_PROJECT_ID` - Project ID (integer)
-- `START_DATE` / `END_DATE` - Date range in YYYY-MM-DD format
+- `BACKLOG_<PROFILE>_API_KEY` - API key from Backlog space settings
+- `BACKLOG_<PROFILE>_HOST` - Backlog host (e.g., `mycompany.backlog.com`)
+- `BACKLOG_<PROFILE>_USER_ID` - User ID (integer, optional)
+- `BACKLOG_<PROFILE>_PROJECT_ID` - Project ID (integer, optional)
 
 **Calendar analysis:**
-- `START_DATE` / `END_DATE` - Date range in YYYY-MM-DD format for filtering events
 - ICS files should be placed in `storage/calendar/` directory
 
 **Notion analysis:**
 - `NOTION_TOKEN` - Notion integration token with content read access
-- `NOTION_USER_ID` - (Optional) Specific user ID to filter pages by. If not provided, auto-detected user ID will be used
-- `START_DATE` / `END_DATE` - Date range in YYYY-MM-DD format
+- `NOTION_USER_ID` - (Optional) Specific user ID to filter pages by
 
-Use `.env.example` as a template.
+**Google Workspace analysis:**
+- `GOOGLE_CLIENT_ID` - OAuth2 client ID (from GCP Console)
+- `GOOGLE_CLIENT_SECRET` - OAuth2 client secret
+- `GOOGLE_TOKEN_FILE` - (Optional) Token cache path (default: `storage/google_token.json`)
+- `GOOGLE_DOCS_RELATED_NAMES` - (Optional) Comma-separated keywords to match related files by title
+- `GOOGLE_DOCS_CHECK_REVISIONS` - (Optional) Set to `true` to check revision history of excluded files
+
+**All analyzers:**
+- `START_DATE` / `END_DATE` - Date range in YYYY-MM-DD format
 
 ## Common Commands
 
 **Install dependencies:**
 ```bash
 make install
-# or: go mod tidy
 ```
 
-**Build unified command:**
+**Build:**
 ```bash
 make build
 ```
 
-**Run analysis (unified command):**
+**Run analysis:**
 ```bash
-make run-github     # GitHub analysis
-make run-backlog    # Backlog analysis  
-make run-calendar   # Calendar analysis
-make run-notion     # Notion analysis
-make run-all        # All analyzers
+make run-github
+make run-backlog
+make run-calendar
+make run-notion
+make run-google
+make run-all
 
-# Direct execution with flags:
-./dev-stats -analyzer github
-./dev-stats -analyzer backlog,calendar
-./dev-stats -analyzer all
-./dev-stats -list    # List available analyzers
-./dev-stats -help    # Show help
+# Direct execution:
+./bin/dev-stats -analyzer github
+./bin/dev-stats -analyzer google
+./bin/dev-stats -analyzer all
+./bin/dev-stats -list
+./bin/dev-stats -help
 ```
 
-**Notion page download:**
+**Download:**
 ```bash
-make download       # Downloads Notion pages specified in notion-urls/${START_DATE}_to_${END_DATE}.md
-# or: ./dev-stats -download notion-urls/YYYY-MM-DD_to_YYYY-MM-DD.md
+make download-notion   # Downloads Notion pages specified in notion-urls/${START_DATE}_to_${END_DATE}.md
+make download-google   # Downloads Google Workspace files modified in date range
 ```
-
 
 **Code quality checks:**
 ```bash
@@ -136,31 +150,32 @@ make check  # Run all checks
 - Parses ICS (iCalendar) files from `storage/calendar/` directory
 - Supports multiple datetime formats: UTC (`YYYYMMDDTHHMMSSZ`), timezone-aware (`DTSTART;TZID=Asia/Tokyo`), and date-only (`VALUE=DATE`)
 - Detects all-day events using both `VALUE=DATE` format and duration-based heuristics (24-hour or multiples)
-- Comprehensive error handling with detailed logging for parsing issues
 - Provides three ranking systems: event count, duration (excluding all-day), and all-day event days
 
 **Notion API Integration:**
 - Uses Notion API v1 with Integration Token authentication
 - Auto-detects user ID from workspace pages to handle token vs workspace user ID mismatch
-- Supports custom user ID specification via `NOTION_USER_ID` environment variable
 - Client-side filtering by date range and user involvement (created or edited pages)
 - Smart pagination with early termination for performance optimization
 - Caches database titles and user names to minimize API calls
-- Extracts page titles from properties with `type: "title"`
 
 **Notion Page Downloader:**
 - Downloads specific Notion pages to markdown files based on URLs listed in markdown files
-- Automatically updates page titles with actual Notion page titles after fetching
 - Uses category names from markdown file as directory names (no hardcoded mappings)
-- Preserves spaces in filenames, only sanitizes filesystem-incompatible characters
 - Automatically updates the original markdown file with actual page titles
-- File structure: `notion-downloads/YYYY-MM-DD_to_YYYY-MM-DD/Category Name/Page Title.md`
-- Creates comprehensive markdown output with metadata, properties, and full content
+- File structure: `output/YYYY-MM-DD_to_YYYY-MM-DD/notion/<Category Name>/<Page Title>.md`
+
+**Google Workspace Integration:**
+- Uses Google Drive API v3 to list Docs/Slides/Sheets (`'me' in owners or 'me' in writers`)
+- OAuth2 authentication with localhost callback; token cached in `storage/google_token.json`
+- Categorizes files as created / updated / related / excluded
+- Optional revision history check (`GOOGLE_DOCS_CHECK_REVISIONS=true`) with cache in `.cache/revision-cache.json`
+- Export formats: Docs→Markdown, Slides→plain text (.md), Sheets→CSV
+- Skips already-downloaded files based on local vs Drive modification time
 
 **Data Processing:**
 - Deduplicates PRs/issues using URL/ID as unique keys
 - Sorts output alphabetically by organization/repository names or by ranking criteria
-- Provides both detailed listings and comprehensive statistics
 - Filters activities/events by date range during processing
 - Calendar events display duration indicators with special handling for all-day events (`(-)` marker)
 - Notion pages categorized as "created" vs "updated" based on user involvement

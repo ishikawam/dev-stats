@@ -92,7 +92,7 @@ func (d *NotionDownloader) LoadFromMarkdown(markdownPath string) (*DownloadConfi
 			if matches := dateRegex.FindStringSubmatch(trimmedLine); len(matches) == 3 {
 				config.StartDate = matches[1]
 				config.EndDate = matches[2]
-				config.OutputDir = fmt.Sprintf("notion-downloads/%s_to_%s", matches[1], matches[2])
+				config.OutputDir = fmt.Sprintf("output/%s_to_%s/notion", matches[1], matches[2])
 			}
 		}
 

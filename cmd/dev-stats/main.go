@@ -14,19 +14,21 @@ import (
 	"dev-stats/pkg/calendar"
 	"dev-stats/pkg/common"
 	"dev-stats/pkg/github"
+	"dev-stats/pkg/google"
 	"dev-stats/pkg/notion"
 )
 
 func main() {
 	var (
-		analyzerFlag          = flag.String("analyzer", "", "Analyzer to run (github,backlog,calendar,notion,all)")
-		downloadFlag          = flag.String("download", "", "Download Notion pages from markdown file")
-		listBacklogFlag       = flag.Bool("list-backlog", false, "List Backlog projects and members for all profiles")
-		listBacklogProject    = flag.String("list-backlog-project", "", "List members of a specific Backlog project (specify project ID)")
-		listBacklogProfiles   = flag.Bool("list-backlog-profiles", false, "List all Backlog profiles")
-		listBacklogClear      = flag.Bool("list-backlog-clear", false, "Clear cache and refresh Backlog data")
-		helpFlag              = flag.Bool("help", false, "Show help")
-		listFlag              = flag.Bool("list", false, "List available analyzers")
+		analyzerFlag        = flag.String("analyzer", "", "Analyzer to run (github,backlog,calendar,notion,google,all)")
+		downloadFlag        = flag.String("download", "", "Download Notion pages from markdown file")
+		downloadGoogleFlag  = flag.Bool("download-google", false, "Download all Google Workspace files modified in START_DATE to END_DATE")
+		listBacklogFlag     = flag.Bool("list-backlog", false, "List Backlog projects and members for all profiles")
+		listBacklogProject  = flag.String("list-backlog-project", "", "List members of a specific Backlog project (specify project ID)")
+		listBacklogProfiles = flag.Bool("list-backlog-profiles", false, "List all Backlog profiles")
+		listBacklogClear    = flag.Bool("list-backlog-clear", false, "Clear cache and refresh Backlog data")
+		helpFlag            = flag.Bool("help", false, "Show help")
+		listFlag            = flag.Bool("list", false, "List available analyzers")
 	)
 	flag.Parse()
 
@@ -58,6 +60,12 @@ func main() {
 		return
 	}
 
+	// Handle Google Workspace download mode
+	if *downloadGoogleFlag {
+		handleDownloadGoogle()
+		return
+	}
+
 	if *analyzerFlag == "" {
 		fmt.Println("Error: -analyzer flag is required")
 		printHelp()
@@ -86,13 +94,14 @@ func main() {
 	if notionAnalyzer := notion.NewNotionAnalyzer(); notionAnalyzer != nil {
 		analyzers["notion"] = notionAnalyzer
 	}
+	analyzers["google"] = google.NewGDocsAnalyzer()
 
 	// Determine which analyzers to run
 	var analyzersToRun []common.Analyzer
 	requestedAnalyzers := []string{}
 
 	if *analyzerFlag == "all" {
-		requestedAnalyzers = []string{"github", "backlog", "calendar", "notion"}
+		requestedAnalyzers = []string{"github", "backlog", "calendar", "notion", "google"}
 	} else {
 		for _, name := range strings.Split(*analyzerFlag, ",") {
 			requestedAnalyzers = append(requestedAnalyzers, strings.TrimSpace(name))
@@ -225,7 +234,7 @@ func main() {
 
 // createOutputDirectory creates a directory for storing output files
 func createOutputDirectory(startDate, endDate time.Time) string {
-	outputDir := fmt.Sprintf("stats/%s_to_%s",
+	outputDir := fmt.Sprintf("output/%s_to_%s/stats",
 		startDate.Format("2006-01-02"),
 		endDate.Format("2006-01-02"))
 
@@ -254,7 +263,7 @@ func handleListBacklogProfiles() {
 		return
 	}
 
-	fmt.Println("\n=== Backlog Profiles ===\n")
+	fmt.Print("\n=== Backlog Profiles ===\n\n")
 	fmt.Printf("%-15s %-35s %-12s %-12s %s\n", "Profile", "Host", "User ID", "Project ID", "Status")
 	fmt.Println(strings.Repeat("-", 90))
 
@@ -333,6 +342,21 @@ func handleBacklogList(projectID string, forceRefresh bool) {
 	}
 }
 
+// handleDownloadGoogle downloads all Google Workspace files modified in the config date range
+func handleDownloadGoogle() {
+	config, err := common.LoadConfig()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	d := google.NewGDocsDownloader()
+	if err := d.DownloadAll(config.StartDate, config.EndDate, os.Stdout); err != nil {
+		log.Fatalf("Failed to download Google Workspace files: %v", err)
+	}
+
+	fmt.Println("Google Workspace download completed successfully!")
+}
+
 // handleDownload handles the download functionality
 func handleDownload(markdownFile string) {
 	downloader := notion.NewNotionDownloader()
@@ -360,12 +384,14 @@ func printHelp() {
 	fmt.Println("Usage:")
 	fmt.Println("  dev-stats -analyzer <analyzer_name>")
 	fmt.Println("  dev-stats -download <markdown_file>")
+	fmt.Println("  dev-stats -download-google")
 	fmt.Println("  dev-stats -list-backlog")
 	fmt.Println("  dev-stats -list-backlog-profiles")
 	fmt.Println()
 	fmt.Println("Flags:")
-	fmt.Println("  -analyzer string             Analyzer to run (github,backlog,calendar,notion,all)")
+	fmt.Println("  -analyzer string             Analyzer to run (github,backlog,calendar,notion,google,all)")
 	fmt.Println("  -download string             Download Notion pages from markdown file")
+	fmt.Println("  -download-google             Download Google Workspace files modified in date range")
 	fmt.Println("  -list-backlog                List all Backlog projects and members (all profiles)")
 	fmt.Println("  -list-backlog-project ID     List members of a specific Backlog project (all profiles)")
 	fmt.Println("  -list-backlog-profiles       List all configured Backlog profiles")
@@ -378,6 +404,7 @@ func printHelp() {
 	fmt.Println("  dev-stats -analyzer github,backlog")
 	fmt.Println("  dev-stats -analyzer all")
 	fmt.Println("  dev-stats -download notion-urls/YYYY-MM-DD_to_YYYY-MM-DD.md")
+	fmt.Println("  dev-stats -download-google")
 	fmt.Println("  dev-stats -list-backlog-profiles")
 	fmt.Println("  dev-stats -list-backlog")
 	fmt.Println("  dev-stats -list-backlog-clear")
@@ -417,6 +444,11 @@ func printHelp() {
 	fmt.Println("  For Notion:")
 	fmt.Println("    NOTION_TOKEN        Notion integration token")
 	fmt.Println("    NOTION_USER_ID      (Optional) Specific user ID to filter pages by")
+	fmt.Println()
+	fmt.Println("  For Google Workspace:")
+	fmt.Println("    GOOGLE_CLIENT_ID     OAuth2 client ID (from GCP Console)")
+	fmt.Println("    GOOGLE_CLIENT_SECRET OAuth2 client secret")
+	fmt.Println("    GOOGLE_TOKEN_FILE    (Optional) Token cache path (default: storage/google_token.json)")
 }
 
 func printAvailableAnalyzers() {
@@ -425,6 +457,7 @@ func printAvailableAnalyzers() {
 	fmt.Println("  backlog  - Backlog issue and activity analysis")
 	fmt.Println("  calendar - Calendar event analysis")
 	fmt.Println("  notion   - Notion page analysis")
+	fmt.Println("  google   - Google Workspace activity analysis (Docs/Slides/Sheets)")
 	fmt.Println("  all      - Run all available analyzers")
 }
 

@@ -1,1 +1,0 @@
-dev-stats is a tool for analyzing productivity by fetching and aggregating activity data from GitHub, Backlog, Calendar, and Notion within a specified period.
